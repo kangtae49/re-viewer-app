@@ -1,0 +1,1 @@
+export type OrderBy = "Dir" | "Name" | "Size" | "Tm" | "Mime" | "Ext";
