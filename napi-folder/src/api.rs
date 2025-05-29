@@ -1,6 +1,4 @@
 use std::cmp::Ordering;
-use std::io;
-use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::path::Component::Prefix;
 use std::sync::OnceLock;
@@ -8,7 +6,7 @@ use std::time::SystemTime;
 use mime_guess::from_path;
 use moka::future::Cache;
 use rayon::prelude::*;
-use crate::models::{MetaType, OrdItem, OrderAsc, OrderBy, CacheKey, CacheVal, Item, Folder, Params};
+use crate::models::{MetaType, OrdItem, OrderAsc, OrderBy, CacheKey, CacheVal, Item, Folder, Params, State, ApiError, StateParams};
 use crate::path_ext::PathExt;
 use crate::system_time_ext::SystemTimeExt;
 
@@ -20,12 +18,14 @@ pub fn get_instance() -> &'static Api {
 
 pub struct Api {
     cache: Cache<CacheKey, CacheVal>,
+    state: Cache<String, State>,
 }
 
 impl Default for Api {
     fn default() -> Self {
         Api {
             cache: Cache::new(100),
+            state: Cache::new(100),
         }
     }
 }
@@ -36,32 +36,28 @@ impl Api {
     pub fn new() -> Self {
         Api {
             cache: Cache::new(100),
+            state: Cache::new(100),
         }
     }
 
-    #[allow(dead_code)]
-    pub async fn get_folder(&self, params: Params) -> io::Result<String> {
-        let Params {
-            is_pretty,
-            ..
-        } = params;
-        match self.dir(params).await {
-            Ok(folder) => {
-                let json = if is_pretty {
-                    serde_json::to_string_pretty(&folder)?
-                } else {
-                    serde_json::to_string(&folder)?
-                };
-                Ok(json)
-            },
-            Err(err) => {
-                println!("err: {:?}", err);
-                Err(err)
-            },
-        }
-    }
+    // #[allow(dead_code)]
+    // pub async fn get_folder(&self, params: &Params) -> io::Result<Folder> {
+    //     let Params {
+    //         is_pretty,
+    //         ..
+    //     } = params;
+    //     match self.dir(params).await {
+    //         Ok(folder) => {
+    //             Ok(folder)
+    //         },
+    //         Err(err) => {
+    //             println!("err: {:?}", err);
+    //             Err(err)
+    //         },
+    //     }
+    // }
 
-    async fn get_entries<P: AsRef<Path>>(&self, p: P) -> io::Result<Vec<PathBuf>> {
+    async fn get_entries<P: AsRef<Path>>(&self, p: P) -> Result<Vec<PathBuf>, ApiError> {
         let dir = std::fs::read_dir(p.as_ref())?;
         // let mut dir = fs::read_dir(p.as_ref()).await?;
         let entries: Vec<PathBuf> = dir
@@ -85,16 +81,17 @@ impl Api {
     }
 
 
-    async fn dir(&self, params: Params) -> io::Result<Folder> {
+    pub async fn get_folder(&self, params: &Params) -> Result<Folder, ApiError> {
         let Params {
             path_str,
             meta_types,
             ordering,
             skip_n,
             take_n,
-            is_cache,
+            // is_cache,
             ..
         } = params;
+        let is_cache = params.is_cache;
 
         let mut folder = Folder::default();
         let mut abs = std::path::absolute(PathBuf::from(path_str))?;
@@ -125,7 +122,7 @@ impl Api {
                     abs = p.join(PathBuf::from(abs_filename));
                     base_dir = p.to_string_lossy().to_string();
                 }
-                None => return Err(io::Error::new(ErrorKind::Other, String::from("Err Path"))),
+                None => return Err(ApiError::Custom(String::from("Err Parent"))),
             };
         }
 
@@ -165,7 +162,7 @@ impl Api {
                 path: folder.path_param.clone(),
                 tm: match system_time {
                     Some(system_time) => system_time,
-                    None => return  Err(io::Error::new(ErrorKind::Other, "Err SystemTime")),
+                    None => return Err(ApiError::Custom(String::from("Err SystemTime"))),
                 },
             };
 
@@ -173,9 +170,9 @@ impl Api {
             sorted_items = match opt_cache_val {
                 Some(mut cache_val) => {
                     println!("hit cache");
-                    if &cache_val.ordering != &ordering {
+                    if &cache_val.ordering != ordering {
                         let mut items_cache = cache_val.paths.par_iter().map(|entry|as_item(entry, &meta_types)).collect::<Vec<Item>>();
-                        sort_items(&mut items_cache, ordering.clone());
+                        sort_items(&mut items_cache, &ordering);
                         cache_val.items = items_cache;
                         self.cache.insert(cache_key.clone(), cache_val).await;
                     }
@@ -185,7 +182,7 @@ impl Api {
                     match self.get_entries(&abs).await {
                         Ok(paths) => {
                             let mut items_new = paths.par_iter().map(|entry|as_item(entry, &meta_types)).collect::<Vec<Item>>();
-                            sort_items(&mut items_new, ordering.clone());
+                            sort_items(&mut items_new, &ordering);
                             let cache_val = CacheVal {
                                 ordering: ordering.clone(),
                                 paths,
@@ -210,7 +207,7 @@ impl Api {
                     sorted_items = vec![]
                 }
             }
-            sort_items(&mut sorted_items, ordering.clone());
+            sort_items(&mut sorted_items, &ordering);
         }
 
         let len_items = sorted_items.len();
@@ -224,6 +221,30 @@ impl Api {
         folder.item.items = Some(items_sliced);
 
         Ok(folder)
+    }
+
+    pub async fn set_state(&self, key: String, state: State) -> Result<StateParams, ApiError> {
+        self.state.insert(key.clone(), state.clone()).await;
+        println!("set: {:?}", state);
+        Ok(StateParams {
+            key: key.clone(),
+            val: state,
+        })
+    }
+
+    pub async fn get_state(&self, key: &String) -> Result<StateParams, ApiError> {
+        match self.state.get(key).await {
+            Some(state) => {
+                println!("get: {:?}", state);
+                Ok(StateParams {
+                    key: key.clone(),
+                    val: state,
+                })
+            },
+            None => {
+                Err(ApiError::Custom(String::from("Err State")))
+            }
+        }
     }
 }
 
@@ -293,7 +314,7 @@ fn cmp_item<T: Ord>(a: &T, b: &T, asc: &OrderAsc) -> Option<Ordering> {
     None
 }
 
-fn sort_items(items: &mut Vec<Item>, ordering: Vec<OrdItem>) {
+fn sort_items(items: &mut Vec<Item>, ordering: &Vec<OrdItem>) {
     items.sort_by(|a, b| {
         for ord in ordering.iter() {
             if OrderBy::Dir == ord.nm {
@@ -359,6 +380,8 @@ fn sort_items(items: &mut Vec<Item>, ordering: Vec<OrdItem>) {
         }
         return Ordering::Equal
     });
+
+
 }
 
 
@@ -389,7 +412,7 @@ mod tests {
             path_str: String::from(r"C://docs"),
             ..Params::default()
         };
-        assert_eq!(api.dir(params).await.unwrap().base_dir, "C:");
+        assert_eq!(api.get_folder(&params).await.unwrap().base_dir, "C:");
     }
 
     #[tokio::test]
@@ -399,7 +422,7 @@ mod tests {
             path_str: String::from(r"C:\Windows\WinSxS"),
             ..Params::default()
         };
-        assert!(api.dir(params).await.is_ok());
+        assert!(api.get_folder(&params).await.is_ok());
         // assert!(api.dir(String::from("C://"), vec![], vec![], None, None).await.is_ok());
 
     }
@@ -424,7 +447,7 @@ mod tests {
             path_str: String::from(r"C:\Windows\WinSxS"),
             ..Params::default()
         };
-        assert!(api.dir(params).await.is_ok());
+        assert!(api.get_folder(&params).await.is_ok());
 
     }
 
@@ -436,9 +459,9 @@ mod tests {
             // is_cache: false,
             ..Params::default()
         };
-        match api.get_folder(params.clone()).await {
-            Ok(json) => {
-                println!("{}", json.len());
+        match api.get_folder(&params).await {
+            Ok(_) => {
+                println!("ok");
             },
             Err(err) => {
                 println!("err: {:?}", err);

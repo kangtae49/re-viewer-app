@@ -39,3 +39,9 @@ npm run make
 npm run publish
 ```
 
+```js
+await folderApi.readFolder({path_str: "C:/"})
+await folderApi.setStatus({key: "a", val: {"Text": "------------" }})
+await folderApi.getStatus({key: "a", val: "None"})
+
+```

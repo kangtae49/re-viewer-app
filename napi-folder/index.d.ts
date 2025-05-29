@@ -6,4 +6,6 @@
 export declare class FolderApi {
   constructor()
   readFolder(jsonParams: string): Promise<string>
+  getState(jsonParams: string): Promise<string>
+  setState(jsonParams: string): Promise<string>
 }

@@ -1,9 +1,14 @@
 use std::path::{PathBuf};
 use std::time::SystemTime;
-// use serde_json;
+use napi;
 use serde::{Serialize, Deserialize};
 use serde_with::{serde_as, skip_serializing_none};
 use ts_rs::TS;
+use thiserror::Error;
+use std::io;
+use serde_json;
+use napi::{Error as NApiError, Status};
+
 #[derive(TS, Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug)]
 #[ts(export)]
 pub enum MetaType {
@@ -135,6 +140,73 @@ impl Default for Params {
             take_n: Some(5),
             is_pretty: true,
             is_cache: true,
+        }
+    }
+}
+
+#[allow(dead_code)]
+#[skip_serializing_none]
+#[serde_as]
+#[derive(TS, Serialize, Deserialize, Clone, Debug)]
+#[ts(export)]
+pub enum State {
+    None,
+    Number(Option<i64>),
+    Float(Option<f64>),
+    Text(Option<String>),
+    Bool(Option<bool>),
+}
+
+#[allow(dead_code)]
+#[skip_serializing_none]
+#[serde_as]
+#[derive(TS, Serialize, Deserialize, Clone, Debug)]
+#[ts(export)]
+pub struct StateParams {
+    pub key: String,
+    pub val: State,
+}
+
+#[derive(Error, Debug)]
+pub enum ApiError {
+    #[error("NApi error: {0}")]
+    NApi(#[from] napi::Error),
+
+    #[error("IO error: {0}")]
+    Io(#[from] io::Error),
+
+    #[error("JSON error: {0}")]
+    Json(#[from] serde_json::Error),
+
+    // #[error("JSON2 error: {0}")]
+    // Json2(#[from] serde_json::error::Error),
+
+
+    #[error("Custom error: {0}")]
+    Custom(String),
+
+}
+
+impl From<ApiError> for NApiError {
+    fn from(err: ApiError) -> Self {
+        match err {
+            ApiError::NApi(e) => e,
+
+            ApiError::Io(e) => {
+                NApiError::new(Status::GenericFailure, format!("IO error: {}", e))
+            }
+
+            ApiError::Json(e) => {
+                NApiError::new(Status::InvalidArg, format!("JSON error: {}", e))
+            }
+
+            // ApiError::Json2(e) => {
+            //     NApiError::new(Status::InvalidArg, format!("JSON2 error: {}", e))
+            // }
+
+            ApiError::Custom(msg) => {
+                NApiError::new(Status::GenericFailure, msg)
+            }
         }
     }
 }
