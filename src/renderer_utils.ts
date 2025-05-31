@@ -10,7 +10,7 @@ export const createOptParams = (
         skip_n: null,
         take_n: null,
         is_pretty: null,
-        is_cache: null,
+        cache_nm: null,
         ...params,
     }
 }

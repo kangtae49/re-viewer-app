@@ -1,5 +1,4 @@
 use std::collections::BTreeSet;
-use std::path::{PathBuf};
 use std::time::SystemTime;
 use napi;
 use serde::{Serialize, Deserialize};
@@ -75,7 +74,6 @@ pub struct CacheFileKey {
 
 #[derive(Clone)]
 pub struct CacheVal {
-    pub paths: Vec<PathBuf>,
     pub items: Vec<Item>,
     pub ordering: Vec<OrdItem>,
 }

@@ -164,16 +164,25 @@ impl Api {
                 },
                 meta_types: meta_types.clone().into_iter().collect(),
             };
+            let cache_paths_key = CachePathsKey {
+                nm: cache_key.clone().nm,
+                path: cache_key.clone().path,
+                tm: cache_key.clone().tm,
+            };
 
             let opt_cache_val = self.cache_folder.get(&cache_key).await;
 
             sorted_items = match opt_cache_val {
-
                 Some(mut cache_val) => {
                     println!("hit cache");
-
                     if cache_val.ordering != ordering  {
-                        let mut items_cache = cache_val.paths.par_iter().map(|entry|as_item(entry, &meta_types)).collect::<Vec<Item>>();
+                        let paths = match self.cache_paths.get(&cache_paths_key).await {
+                            Some(paths) => paths,
+                            None => {
+                                self.get_entries(&abs).await.unwrap_or_else(|_err| vec![])
+                            }
+                        };
+                        let mut items_cache = paths.par_iter().map(|entry|as_item(entry, &meta_types)).collect::<Vec<Item>>();
                         sort_items(&mut items_cache, &ordering);
                         cache_val.items = items_cache;
                         self.cache_folder.insert(cache_key.clone(), cache_val).await;
@@ -181,23 +190,10 @@ impl Api {
                     self.cache_folder.get(&cache_key).await.map(|v| v.items).unwrap_or(vec![])
                 }
                 None => {
-                    let cache_paths_key = CachePathsKey {
-                        nm: cache_key.clone().nm,
-                        path: cache_key.clone().path,
-                        tm: cache_key.clone().tm,
-                    };
                     let paths = match self.cache_paths.get(&cache_paths_key).await {
                         Some(paths) => paths,
                         None => {
-                            let paths = match self.get_entries(&abs).await {
-                                Ok(paths) => {
-                                    paths
-                                },
-                                Err(err) => {
-                                    println!("err: {:?}", err);
-                                    vec![]
-                                },
-                            };
+                            let paths = self.get_entries(&abs).await.unwrap_or_else(|_err| vec![]);
                             self.cache_paths.insert(cache_paths_key.clone(), paths.clone()).await;
                             paths.clone()
                         },
@@ -207,7 +203,6 @@ impl Api {
                     sort_items(&mut items_new, &ordering);
                     let cache_val = CacheVal {
                         ordering: ordering.clone(),
-                        paths,
                         items: items_new,
                     };
                     self.cache_folder.insert(cache_key.clone(), cache_val).await;
@@ -227,14 +222,19 @@ impl Api {
         }
 
         let len_items = sorted_items.len();
-        let items_sliced: Vec<Item> = sorted_items.iter().skip(skip_n.unwrap_or(0)).take(take_n.unwrap_or(len_items)).cloned().collect();
-
-        folder.skip_n = Some(skip_n.unwrap_or(0));
-        folder.take_n = Some(take_n.unwrap_or(len_items));
+        let skip = skip_n.unwrap_or(0);
+        let take = match take_n {
+            Some(n) => std::cmp::min(n, len_items - skip),
+            None =>  len_items - skip
+        };
+        let items_sliced: Vec<Item> = sorted_items.iter().skip(skip).take(take).cloned().collect();
+        folder.skip_n = Some(skip);
+        folder.take_n = Some(take);
         folder.ordering = Some(ordering.clone());
         folder.tot = Some(len_items);
         folder.item.cnt = Some(items_sliced.len());
         folder.item.items = Some(items_sliced);
+        folder.item.has = if meta_types.contains(&MetaType::Has) { Some(len_items > 0) } else { None };
 
         Ok(folder)
     }

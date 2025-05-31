@@ -45,7 +45,7 @@ impl FolderApi {
       take_n: params.take_n,
     };
     let folder = get_instance().get_folder(&new_params).await.map_err(Into::<NApiError>::into)?;
-
+    
     self.from_obj(&folder, new_params.is_pretty).map_err(Into::<NApiError>::into)
   }
 
