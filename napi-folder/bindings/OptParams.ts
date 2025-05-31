@@ -2,4 +2,4 @@
 import type { MetaType } from "./MetaType";
 import type { OrdItem } from "./OrdItem";
 
-export type OptParams = { path_str: string | null, meta_types: Array<MetaType> | null, ordering: Array<OrdItem> | null, skip_n: number | null, take_n: number | null, is_pretty: boolean | null, is_cache: boolean | null, };
+export type OptParams = { path_str: string | null, meta_types: Array<MetaType> | null, ordering: Array<OrdItem> | null, skip_n: number | null, take_n: number | null, is_pretty: boolean | null, cache_nm: string | null, };

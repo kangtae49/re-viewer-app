@@ -10,7 +10,7 @@ use mime_guess::from_path;
 use encoding_rs::Encoding;
 use moka::future::Cache;
 use rayon::prelude::*;
-use crate::models::{MetaType, OrdItem, OrderAsc, OrderBy, CacheKey, CacheVal, Item, Folder, Params, ApiError};
+use crate::models::{MetaType, OrdItem, OrderAsc, OrderBy, CacheKey, CacheVal, CachePathsKey, CacheFileKey, Item, Folder, Params, ApiError};
 use crate::path_ext::PathExt;
 use crate::system_time_ext::SystemTimeExt;
 
@@ -22,7 +22,8 @@ pub fn get_instance() -> &'static Api {
 
 pub struct Api {
     cache_folder: Cache<CacheKey, CacheVal>,
-    cache_txt: Cache<CacheKey, String>,
+    cache_paths: Cache<CachePathsKey, Vec<PathBuf>>,
+    cache_txt: Cache<CacheFileKey, String>,
     state: Cache<String, String>,
 }
 
@@ -30,6 +31,7 @@ impl Default for Api {
     fn default() -> Self {
         Api {
             cache_folder: Cache::new(100),
+            cache_paths: Cache::new(100),
             cache_txt: Cache::new(100),
             state: Cache::new(100),
         }
@@ -42,6 +44,7 @@ impl Api {
     pub fn new() -> Self {
         Api {
             cache_folder: Cache::new(100),
+            cache_paths: Cache::new(100),
             cache_txt: Cache::new(100),
             state: Cache::new(100),
         }
@@ -79,7 +82,7 @@ impl Api {
             ordering,
             skip_n,
             take_n,
-            is_cache,
+            cache_nm,
             ..
         } = params.clone();
 
@@ -129,11 +132,11 @@ impl Api {
         //   C://abc/def   C://abc       "def"
 
         folder.path_param = abs.to_string_lossy().into();
-        folder.base_dir = base_dir;
+        folder.base_nm = base_dir;
 
         let mut item = Item::default();
-        item.name = item_name;
-        item.is_dir = abs.is_dir();
+        item.nm = item_name;
+        item.dir = abs.is_dir();
         let mut system_time : Option<SystemTime> = None;
         match abs.metadata() {
             Ok(meta) => {
@@ -150,20 +153,26 @@ impl Api {
         folder.item = item;
 
         let mut sorted_items: Vec<Item>;
-        if is_cache {
+
+        if let Some(cache_nm_str) = cache_nm {
             let cache_key = CacheKey {
+                nm: cache_nm_str,
                 path: folder.path_param.clone(),
                 tm: match system_time {
                     Some(system_time) => system_time,
                     None => return Err(ApiError::Folder(String::from("Err SystemTime"))),
                 },
+                meta_types: meta_types.clone().into_iter().collect(),
             };
 
             let opt_cache_val = self.cache_folder.get(&cache_key).await;
+
             sorted_items = match opt_cache_val {
+
                 Some(mut cache_val) => {
                     println!("hit cache");
-                    if cache_val.ordering != ordering {
+
+                    if cache_val.ordering != ordering  {
                         let mut items_cache = cache_val.paths.par_iter().map(|entry|as_item(entry, &meta_types)).collect::<Vec<Item>>();
                         sort_items(&mut items_cache, &ordering);
                         cache_val.items = items_cache;
@@ -172,23 +181,37 @@ impl Api {
                     self.cache_folder.get(&cache_key).await.map(|v| v.items).unwrap_or(vec![])
                 }
                 None => {
-                    match self.get_entries(&abs).await {
-                        Ok(paths) => {
-                            let mut items_new = paths.par_iter().map(|entry|as_item(entry, &meta_types)).collect::<Vec<Item>>();
-                            sort_items(&mut items_new, &ordering);
-                            let cache_val = CacheVal {
-                                ordering: ordering.clone(),
-                                paths,
-                                items: items_new,
+                    let cache_paths_key = CachePathsKey {
+                        nm: cache_key.clone().nm,
+                        path: cache_key.clone().path,
+                        tm: cache_key.clone().tm,
+                    };
+                    let paths = match self.cache_paths.get(&cache_paths_key).await {
+                        Some(paths) => paths,
+                        None => {
+                            let paths = match self.get_entries(&abs).await {
+                                Ok(paths) => {
+                                    paths
+                                },
+                                Err(err) => {
+                                    println!("err: {:?}", err);
+                                    vec![]
+                                },
                             };
-                            self.cache_folder.insert(cache_key.clone(), cache_val).await;
-                            self.cache_folder.get(&cache_key).await.map(|v| v.items).unwrap_or(vec![])
-                        }
-                        Err(err) => {
-                            println!("err: {:?}", err);
-                            vec![]
+                            self.cache_paths.insert(cache_paths_key.clone(), paths.clone()).await;
+                            paths.clone()
                         },
-                    }
+                    };
+
+                    let mut items_new = paths.par_iter().map(|entry|as_item(entry, &meta_types)).collect::<Vec<Item>>();
+                    sort_items(&mut items_new, &ordering);
+                    let cache_val = CacheVal {
+                        ordering: ordering.clone(),
+                        paths,
+                        items: items_new,
+                    };
+                    self.cache_folder.insert(cache_key.clone(), cache_val).await;
+                    self.cache_folder.get(&cache_key).await.map(|v| v.items).unwrap_or(vec![])
                 }
             };
         } else {
@@ -247,11 +270,12 @@ impl Api {
         // cache
         let p = PathBuf::from(path_str);
         let tm = p.metadata()?.modified()?;
-        let cache_key = CacheKey {
-          path: p.to_string_lossy().into(),
-          tm,
+        let cache_file_key = CacheFileKey {
+            nm: "file".to_string(),
+            path: p.to_string_lossy().into(),
+            tm,
         };
-        let opt_cache_val = self.cache_txt.get(&cache_key).await;
+        let opt_cache_val = self.cache_txt.get(&cache_file_key).await;
         if let Some(content) = opt_cache_val {
             return Ok(content)
         };
@@ -286,40 +310,44 @@ impl Api {
             output.push_str(&decoded);
         }
 
-        self.cache_txt.insert(cache_key, output.clone()).await;
+        self.cache_txt.insert(cache_file_key, output.clone()).await;
 
         Ok(output)
     }
 }
 
 fn as_item(entry: &PathBuf, meta_types: &Vec<MetaType>) -> Item {
-    let name = match entry.file_name() {
+    let nm = match entry.file_name() {
         Some(n) => n.to_string_lossy().to_string(),
         None => panic!("Error Filename")
     };
-    let is_dir = entry.is_dir();
-    let mut mime: Option<String> = None;
+    let dir = entry.is_dir();
+    let mut mt: Option<String> = None;
     let mut ext: Option<String> = None;
-    let mut size: Option<u64> = None;
+    let mut sz: Option<u64> = None;
     let mut tm: Option<u64> = None;
-    let mut has_items: Option<bool> = None;
+    let mut has: Option<bool> = None;
 
     let cnt: Option<usize> = None;
-    if !is_dir {
-        mime = Some(from_path(&name).first_or_octet_stream().to_string());
-        ext = entry.extension().map(|ext| ext.to_string_lossy().to_string().to_lowercase());
+    if !dir {
+        if meta_types.contains(&MetaType::Mt) {
+            mt = Some(from_path(&nm).first_or_octet_stream().to_string());
+        }
+        if meta_types.contains(&MetaType::Ext) {
+            ext = entry.extension().map(|ext| ext.to_string_lossy().to_string().to_lowercase());
+        }
     }
 
     if !meta_types.is_empty() {
         match entry.metadata() {
             Ok(meta) => {
-                if is_dir {
-                    if meta_types.contains(&MetaType::HasItems) {
-                        has_items = Some(entry.has_children());
+                if dir {
+                    if meta_types.contains(&MetaType::Has) {
+                        has = Some(entry.has_children());
                     }
                 } else {
-                    if meta_types.contains(&MetaType::Size) {
-                        size = Some(meta.len());
+                    if meta_types.contains(&MetaType::Sz) {
+                        sz = Some(meta.len());
                     }
                 }
                 if meta_types.contains(&MetaType::Tm) {
@@ -335,13 +363,13 @@ fn as_item(entry: &PathBuf, meta_types: &Vec<MetaType>) -> Item {
     }
 
     Item {
-        name,
-        is_dir,
-        mime,
+        nm,
+        dir,
+        mt,
         ext,
-        size,
+        sz,
         cnt,
-        has_items,
+        has,
         tm,
         items: None,
     }
@@ -362,18 +390,18 @@ fn sort_items(items: &mut Vec<Item>, ordering: &Vec<OrdItem>) {
     items.sort_by(|a, b| {
         for ord in ordering.iter() {
             if OrderBy::Dir == ord.nm {
-                match cmp_item(&b.is_dir, &a.is_dir, &ord.asc) {
+                match cmp_item(&b.dir, &a.dir, &ord.asc) {
                     Some(ord) => return ord,
                     None => continue
                 }
-            } else if OrderBy::Name == ord.nm {
-                let a_ord = a.name.to_lowercase();
-                let b_ord = b.name.to_lowercase();
+            } else if OrderBy::Nm == ord.nm {
+                let a_ord = a.nm.to_lowercase();
+                let b_ord = b.nm.to_lowercase();
                 match cmp_item(&a_ord, &b_ord, &ord.asc) {
                     Some(ord) => return ord,
                     None => continue
                 }
-            } else if OrderBy::Ext == ord.nm && !a.is_dir {
+            } else if OrderBy::Ext == ord.nm && !a.dir {
                 match (&a.ext, &b.ext) {
                     (Some(a), Some(b)) => {
                         let a_ord = a.to_lowercase();
@@ -385,8 +413,8 @@ fn sort_items(items: &mut Vec<Item>, ordering: &Vec<OrdItem>) {
                     }
                     _ => continue
                 }
-            } else if OrderBy::Mime == ord.nm && !a.is_dir {
-                match (&a.mime, &b.mime) {
+            } else if OrderBy::Mt == ord.nm && !a.dir {
+                match (&a.mt, &b.mt) {
                     (Some(a), Some(b)) => {
                         let a_ord = a.to_lowercase();
                         let b_ord = b.to_lowercase();
@@ -397,8 +425,8 @@ fn sort_items(items: &mut Vec<Item>, ordering: &Vec<OrdItem>) {
                     }
                     _ => continue
                 }
-            } else if OrderBy::Size == ord.nm && a.size.ne(&b.size) {
-                match (&a.size, &b.size) {
+            } else if OrderBy::Sz == ord.nm && a.sz.ne(&b.sz) {
+                match (&a.sz, &b.sz) {
                     (Some(a), Some(b)) => {
                         match cmp_item(a, b, &ord.asc) {
                             Some(ord) => return ord,
@@ -409,8 +437,8 @@ fn sort_items(items: &mut Vec<Item>, ordering: &Vec<OrdItem>) {
                 }
             }
         }
-        if !ordering.iter().any(|o| o.nm == OrderBy::Name) {
-            return a.name.cmp(&b.name)
+        if !ordering.iter().any(|o| o.nm == OrderBy::Nm) {
+            return a.nm.cmp(&b.nm)
         }
         return Ordering::Equal
     });
@@ -444,7 +472,7 @@ mod tests {
             path_str: String::from(r"C://docs"),
             ..Params::default()
         };
-        assert_eq!(api.get_folder(&params).await.unwrap().base_dir, "C:");
+        assert_eq!(api.get_folder(&params).await.unwrap().base_nm, "C:");
     }
 
     #[tokio::test]

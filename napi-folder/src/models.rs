@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::path::{PathBuf};
 use std::time::SystemTime;
 use napi;
@@ -9,12 +10,14 @@ use std::io;
 use serde_json;
 use napi::{Error as NApiError, Status};
 
-#[derive(TS, Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug)]
+#[derive(TS, Serialize, Deserialize, Clone, Eq, PartialEq, Hash, PartialOrd, Ord, Debug)]
 #[ts(export)]
 pub enum MetaType {
-    Size,
+    Sz,
     Tm,
-    HasItems,
+    Has,
+    Mt,
+    Ext,
 }
 
 #[allow(dead_code)]
@@ -22,10 +25,10 @@ pub enum MetaType {
 #[ts(export)]
 pub enum OrderBy {
     Dir,
-    Name,
-    Size,
+    Nm,
+    Sz,
     Tm,
-    Mime,
+    Mt,
     Ext,
 }
 
@@ -48,10 +51,27 @@ pub struct OrdItem {
 
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub struct CacheKey {
+    pub nm: String,
+    pub path: String,
+    pub tm: SystemTime,
+    pub meta_types: BTreeSet<MetaType>,
+}
+
+
+#[derive(Clone, Eq, PartialEq, Hash)]
+pub struct CachePathsKey {
+    pub nm: String,
     pub path: String,
     pub tm: SystemTime,
 }
 
+
+#[derive(Clone, Eq, PartialEq, Hash)]
+pub struct CacheFileKey {
+    pub nm: String,
+    pub path: String,
+    pub tm: SystemTime,
+}
 
 #[derive(Clone)]
 pub struct CacheVal {
@@ -67,7 +87,7 @@ pub struct CacheVal {
 pub struct Folder {
     pub item: Item,
     pub path_param: String,
-    pub base_dir: String,
+    pub base_nm: String,
     #[ts(optional)]
     pub tot: Option<usize>,
     #[ts(optional)]
@@ -85,18 +105,18 @@ pub struct Folder {
 #[derive(TS, Serialize, Clone, Debug, Default)]
 #[ts(export)]
 pub struct Item {
-    pub name: String,
-    pub is_dir: bool,
+    pub nm: String,
+    pub dir: bool,
     #[ts(optional)]
     pub ext: Option<String>,
     #[ts(optional)]
-    pub mime: Option<String>,
+    pub mt: Option<String>,
     #[ts(optional)]
-    pub size: Option<u64>,  // u64
+    pub sz: Option<u64>,  // u64
     #[ts(optional)]
     pub cnt: Option<usize>,  // usize
     #[ts(optional)]
-    pub has_items: Option<bool>,
+    pub has: Option<bool>,
     #[ts(optional)]
     pub tm: Option<u64>,  // u64
     #[ts(optional)]
@@ -115,7 +135,7 @@ pub struct OptParams {
     pub skip_n: Option<usize>,
     pub take_n: Option<usize>,
     pub is_pretty: Option<bool>,
-    pub is_cache: Option<bool>,
+    pub cache_nm: Option<String>,
 }
 
 #[allow(dead_code)]
@@ -127,35 +147,24 @@ pub struct Params {
     pub skip_n: Option<usize>,
     pub take_n: Option<usize>,
     pub is_pretty: bool,
-    pub is_cache: bool,
+    pub cache_nm: Option<String>,
 }
 
 impl Default for Params {
     fn default() -> Self {
         Params {
             path_str: String::from("."),
-            meta_types: vec![MetaType::HasItems, MetaType::Size, MetaType::Tm],
-            ordering: vec![OrdItem{nm: OrderBy::Dir, asc: OrderAsc::Asc}, OrdItem{nm: OrderBy::Name, asc: OrderAsc::Asc}],
+            meta_types: vec![MetaType::Has, MetaType::Sz, MetaType::Tm],
+            ordering: vec![OrdItem{nm: OrderBy::Dir, asc: OrderAsc::Asc}, OrdItem{nm: OrderBy::Nm, asc: OrderAsc::Asc}],
             skip_n: None,
             take_n: Some(5),
             is_pretty: true,
-            is_cache: true,
+            cache_nm: None,
         }
     }
 }
 
 
-
-// #[allow(dead_code)]
-// #[skip_serializing_none]
-// #[serde_as]
-// #[derive(TS, Serialize, Deserialize, Clone, Debug)]
-// #[ts(export)]
-// pub struct State {
-//     pub key: String,
-//     #[ts(optional)]
-//     pub val: Option<String>,
-// }
 
 #[derive(Error, Debug)]
 pub enum ApiError {

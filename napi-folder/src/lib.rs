@@ -36,11 +36,11 @@ impl FolderApi {
     let params: OptParams = self.from_str(json_params.as_str()).map_err(Into::<NApiError>::into)?;
 
     let new_params = Params {
-      meta_types: params.meta_types.unwrap_or(vec![MetaType::Size, MetaType::Tm, MetaType::HasItems]),
-      ordering: params.ordering.unwrap_or(vec![OrdItem { nm: OrderBy::Dir, asc: OrderAsc::Asc }, OrdItem { nm: OrderBy::Name, asc: OrderAsc::Asc }]),
+      meta_types: params.meta_types.unwrap_or(vec![MetaType::Sz, MetaType::Tm, MetaType::Has]),
+      ordering: params.ordering.unwrap_or(vec![OrdItem { nm: OrderBy::Dir, asc: OrderAsc::Asc }, OrdItem { nm: OrderBy::Nm, asc: OrderAsc::Asc }]),
       is_pretty: params.is_pretty.unwrap_or(false),
-      is_cache: params.is_cache.unwrap_or(true),
       path_str: params.path_str.unwrap_or(String::from(".")),
+      cache_nm: params.cache_nm,
       skip_n: params.skip_n,
       take_n: params.take_n,
     };

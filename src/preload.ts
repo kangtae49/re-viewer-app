@@ -2,7 +2,7 @@
 // https://www.electronjs.org/docs/latest/tutorial/process-model#preload-scripts
 
 
-import {contextBridge} from 'electron'
+import {contextBridge, ipcRenderer} from 'electron'
 import type {Folder, OptParams} from "bindings-folder"
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -13,14 +13,18 @@ const {FolderApi} = require("napi-folder")
 //     val: any
 // }
 export interface IFolderAPI {
+    getCurPath: () => Promise<string>,
     readFolder: (params: OptParams) => Promise<Folder>,
     readText: (pathStr: string) => Promise<string>,
     setState: <T> (key: string, val: T) => Promise<T>,
-    getState: (key: string, default_val: string | undefined | null) => Promise<string>,
-    getStateObj: <T> (key: string, default_val: object | undefined) => Promise<T>,
+    // getState: (key: string, default_val: string | undefined | null) => Promise<string>,
+    getState: <T> (key: string, default_val: object | undefined) => Promise<T>,
 }
 
 const api: IFolderAPI = {
+    getCurPath: async (): Promise<string> => {
+        return await ipcRenderer.invoke('get-cur-path');
+    },
     readFolder: async (params: OptParams): Promise<Folder> => {
         return (new FolderApi()).readFolder(JSON.stringify(params))
             .then(JSON.parse)
@@ -43,10 +47,10 @@ const api: IFolderAPI = {
             return new_val
         }
     },
-    getState: async (key: string, default_val: string | undefined | null): Promise<string> => {
-        return (new FolderApi()).getState(key, default_val);
-    },
-    getStateObj: async <T>(key: string, default_val: object | undefined): Promise<T> => {
+    // getState: async (key: string, default_val: string | undefined | null): Promise<string> => {
+    //     return (new FolderApi()).getState(key, default_val);
+    // },
+    getState: async <T>(key: string, default_val: object | undefined): Promise<T> => {
         let obj_default_val;
         if (default_val != null && typeof default_val === 'object') {
             obj_default_val = JSON.stringify(default_val);

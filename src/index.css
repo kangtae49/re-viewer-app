@@ -1,8 +1,8 @@
 html, body { margin: 0; padding: 0; width:100%; height: 100%; }
 .container { margin: 0; padding: 0; width:100%; height: 100%; }
 .main { display: flex; width:100%; height: 100%;}
-.main.tree { overflow: auto;}
-.main.content { overflow: auto; }
+.main .tree { overflow-x: hidden; overflow-y: auto;}
+.main .content { overflow-x: hidden; overflow-y: auto;}
 .gutter { background-color: #e5e2e2; }
 .gutter:hover { cursor: col-resize; }
 

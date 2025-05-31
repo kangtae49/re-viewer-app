@@ -2,4 +2,4 @@
 import type { Item } from "./Item";
 import type { OrdItem } from "./OrdItem";
 
-export type Folder = { item: Item, path_param: string, base_dir: string, tot?: number, skip_n?: number, take_n?: number, ordering?: Array<OrdItem>, };
+export type Folder = { item: Item, path_param: string, base_nm: string, tot?: number, skip_n?: number, take_n?: number, ordering?: Array<OrdItem>, };
