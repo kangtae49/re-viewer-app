@@ -1,7 +1,19 @@
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica,
-    Arial, sans-serif;
-  margin: auto;
-  max-width: 38rem;
-  padding: 2rem;
-}
+html, body { margin: 0; padding: 0; width:100%; height: 100%; }
+.container { margin: 0; padding: 0; width:100%; height: 100%; }
+.main { display: flex; width:100%; height: 100%;}
+.main.tree { overflow: auto;}
+.main.content { overflow: auto; }
+.gutter { background-color: #e5e2e2; }
+.gutter:hover { cursor: col-resize; }
+
+.tree { padding: 0; margin: 0; }
+.tree ul { padding: 0 0 0 8px; margin: 0;}
+.tree li { list-style: none; padding: 0; margin:0; white-space: nowrap;}
+.tree .item { padding: 0 3px 1px 3px; margin: 0; cursor: pointer; display: inline-block;}
+.tree .item:hover { background-color: #e4e9ee; }
+.tree li.selected>div {background-color: #bad0e4;}
+.tree .item .subitem { padding: 0; margin: 0; display: inline-block;}
+.fa-folder, .fa-folder-plus { color: #f4a261; margin-right: 5px;}
+.fa-folder-open { color: #f4a261; margin-right: 5px;}
+.fa-file { color: #2a9d8f; margin-right: 5px;}
+.fa-file-code { color: #2a9d8f; margin-right: 5px;}

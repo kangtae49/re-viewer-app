@@ -1,19 +1,39 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="UTF-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';">
-
-    <title>Hello World!</title>
-
-  </head>
-  <body>
-    <h1>💖 Hello World!</h1>
-    <p>Welcome to your Electron application.</p>
-    <button id="btn_get_folder">get_folder</button>
-    <button id="btn_set_state">set_state</button>
-    <button id="btn_get_state">get_state</button>
-
-    <script type="module" src="/src/renderer.ts"></script>
-  </body>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';">
+  <title>Hello World!</title>
+</head>
+<body>
+<div class="main container">
+  <div class="tree container">
+    <ul>
+      <li>
+        <div class="item">
+          <div class="subitem path-icon">
+            <i class="fa-solid fa-folder"></i>
+          </div>
+          <div class="subitem path-name">
+            C:/
+          </div>
+        </div>
+        <ul>
+          <li>
+            <div class="item">
+              <div class="subitem path-icon">
+                <i class="fa-solid fa-file-code"></i>
+              </div>
+              <div class="subitem path-name">
+                aaa.txt
+              </div>
+            </div>
+        </ul>
+      </li>
+    </ul>
+  </div>
+  <div class="content container">Content</div>
+</div>
+<script type="module" src="/src/renderer.ts"></script>
+</body>
 </html>

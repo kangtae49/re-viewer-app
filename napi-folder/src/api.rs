@@ -3,10 +3,14 @@ use std::path::{Path, PathBuf};
 use std::path::Component::Prefix;
 use std::sync::OnceLock;
 use std::time::SystemTime;
+use std::fs;
+use std::io::{BufReader, Read};
+use chardetng::EncodingDetector;
 use mime_guess::from_path;
+use encoding_rs::Encoding;
 use moka::future::Cache;
 use rayon::prelude::*;
-use crate::models::{MetaType, OrdItem, OrderAsc, OrderBy, CacheKey, CacheVal, Item, Folder, Params, State, ApiError, StateParams};
+use crate::models::{MetaType, OrdItem, OrderAsc, OrderBy, CacheKey, CacheVal, Item, Folder, Params, ApiError};
 use crate::path_ext::PathExt;
 use crate::system_time_ext::SystemTimeExt;
 
@@ -17,14 +21,16 @@ pub fn get_instance() -> &'static Api {
 }
 
 pub struct Api {
-    cache: Cache<CacheKey, CacheVal>,
-    state: Cache<String, State>,
+    cache_folder: Cache<CacheKey, CacheVal>,
+    cache_txt: Cache<CacheKey, String>,
+    state: Cache<String, String>,
 }
 
 impl Default for Api {
     fn default() -> Self {
         Api {
-            cache: Cache::new(100),
+            cache_folder: Cache::new(100),
+            cache_txt: Cache::new(100),
             state: Cache::new(100),
         }
     }
@@ -35,31 +41,15 @@ impl Api {
     #[allow(dead_code)]
     pub fn new() -> Self {
         Api {
-            cache: Cache::new(100),
+            cache_folder: Cache::new(100),
+            cache_txt: Cache::new(100),
             state: Cache::new(100),
         }
     }
 
-    // #[allow(dead_code)]
-    // pub async fn get_folder(&self, params: &Params) -> io::Result<Folder> {
-    //     let Params {
-    //         is_pretty,
-    //         ..
-    //     } = params;
-    //     match self.dir(params).await {
-    //         Ok(folder) => {
-    //             Ok(folder)
-    //         },
-    //         Err(err) => {
-    //             println!("err: {:?}", err);
-    //             Err(err)
-    //         },
-    //     }
-    // }
 
     async fn get_entries<P: AsRef<Path>>(&self, p: P) -> Result<Vec<PathBuf>, ApiError> {
-        let dir = std::fs::read_dir(p.as_ref())?;
-        // let mut dir = fs::read_dir(p.as_ref()).await?;
+        let dir = fs::read_dir(p.as_ref())?;
         let entries: Vec<PathBuf> = dir
             .filter_map(|r| {
                 match r {
@@ -82,19 +72,22 @@ impl Api {
 
 
     pub async fn get_folder(&self, params: &Params) -> Result<Folder, ApiError> {
+
         let Params {
             path_str,
             meta_types,
             ordering,
             skip_n,
             take_n,
-            // is_cache,
+            is_cache,
             ..
-        } = params;
-        let is_cache = params.is_cache;
+        } = params.clone();
 
         let mut folder = Folder::default();
         let mut abs = std::path::absolute(PathBuf::from(path_str))?;
+        if !abs.exists() {
+            return Err(ApiError::Folder(String::from("Not Exists Path")))
+        }
         if abs.is_file() {  // file -> dir
             abs.pop();
         }
@@ -122,7 +115,7 @@ impl Api {
                     abs = p.join(PathBuf::from(abs_filename));
                     base_dir = p.to_string_lossy().to_string();
                 }
-                None => return Err(ApiError::Custom(String::from("Err Parent"))),
+                None => return Err(ApiError::Folder(String::from("Err Parent"))),
             };
         }
 
@@ -162,21 +155,21 @@ impl Api {
                 path: folder.path_param.clone(),
                 tm: match system_time {
                     Some(system_time) => system_time,
-                    None => return Err(ApiError::Custom(String::from("Err SystemTime"))),
+                    None => return Err(ApiError::Folder(String::from("Err SystemTime"))),
                 },
             };
 
-            let opt_cache_val = self.cache.get(&cache_key).await;
+            let opt_cache_val = self.cache_folder.get(&cache_key).await;
             sorted_items = match opt_cache_val {
                 Some(mut cache_val) => {
                     println!("hit cache");
-                    if &cache_val.ordering != ordering {
+                    if cache_val.ordering != ordering {
                         let mut items_cache = cache_val.paths.par_iter().map(|entry|as_item(entry, &meta_types)).collect::<Vec<Item>>();
                         sort_items(&mut items_cache, &ordering);
                         cache_val.items = items_cache;
-                        self.cache.insert(cache_key.clone(), cache_val).await;
+                        self.cache_folder.insert(cache_key.clone(), cache_val).await;
                     }
-                    self.cache.get(&cache_key).await.map(|v| v.items).unwrap_or(vec![])
+                    self.cache_folder.get(&cache_key).await.map(|v| v.items).unwrap_or(vec![])
                 }
                 None => {
                     match self.get_entries(&abs).await {
@@ -188,8 +181,8 @@ impl Api {
                                 paths,
                                 items: items_new,
                             };
-                            self.cache.insert(cache_key.clone(), cache_val).await;
-                            self.cache.get(&cache_key).await.map(|v| v.items).unwrap_or(vec![])
+                            self.cache_folder.insert(cache_key.clone(), cache_val).await;
+                            self.cache_folder.get(&cache_key).await.map(|v| v.items).unwrap_or(vec![])
                         }
                         Err(err) => {
                             println!("err: {:?}", err);
@@ -223,28 +216,79 @@ impl Api {
         Ok(folder)
     }
 
-    pub async fn set_state(&self, key: String, state: State) -> Result<StateParams, ApiError> {
-        self.state.insert(key.clone(), state.clone()).await;
-        println!("set: {:?}", state);
-        Ok(StateParams {
-            key: key.clone(),
-            val: state,
-        })
+    pub async fn set_state(&self, key: String, opt_val: Option<String>) -> Result<Option<String>, ApiError> {
+        match opt_val.clone() {
+            None => {
+                self.state.remove(&key).await;
+            },
+            Some(val) => {
+                self.state.insert(key.clone(), val.clone()).await;
+            },
+        };
+        Ok(opt_val)
     }
 
-    pub async fn get_state(&self, key: &String) -> Result<StateParams, ApiError> {
-        match self.state.get(key).await {
-            Some(state) => {
-                println!("get: {:?}", state);
-                Ok(StateParams {
-                    key: key.clone(),
-                    val: state,
-                })
-            },
-            None => {
-                Err(ApiError::Custom(String::from("Err State")))
+    pub async fn get_state(&self, key: &String, default_val: Option<String>) -> Result<Option<String>, ApiError> {
+        let opt_val = self.state.get(key).await;
+        match (opt_val.clone(), default_val.clone()) {
+            (None, Some(val)) => {
+                self.state.insert(key.clone(), val.clone()).await;
+                Ok(default_val)
+            }
+            (opt_val, _) => {
+                Ok(opt_val)
             }
         }
+    }
+
+    pub async fn read_txt(&self, path_str: &str) -> Result<String, ApiError> {
+        const CHUNK_SIZE: usize = 4096;
+
+        // cache
+        let p = PathBuf::from(path_str);
+        let tm = p.metadata()?.modified()?;
+        let cache_key = CacheKey {
+          path: p.to_string_lossy().into(),
+          tm,
+        };
+        let opt_cache_val = self.cache_txt.get(&cache_key).await;
+        if let Some(content) = opt_cache_val {
+            return Ok(content)
+        };
+
+        let file = fs::File::open(p)?;
+        let mut reader = BufReader::new(file);
+
+        let mut detector = EncodingDetector::new();
+        let mut detect_buf = [0u8; 8192];
+        let n = reader.read(&mut detect_buf)?;
+        detector.feed(&detect_buf[..n], n == 0);
+        let encoding: &Encoding = detector.guess(None, true);
+
+        let mut output = String::new();
+        // let (decoded, had_errors) = encoding.decode_without_bom_handling(&detect_buf[..n]);
+        let (decoded, _, had_errors) = encoding.decode(&detect_buf[..n]);
+        if had_errors {
+            return Err(ApiError::Folder("encoding error".to_string()));
+        }
+        output.push_str(&decoded);
+
+        let mut buffer = [0u8; CHUNK_SIZE];
+        loop {
+            let n = reader.read(&mut buffer)?;
+            if n == 0 {
+                break;
+            }
+            let (decoded, had_errors) = encoding.decode_without_bom_handling(&buffer[..n]);
+            if had_errors {
+                return Err(ApiError::Folder("encoding error".to_string()));
+            }
+            output.push_str(&decoded);
+        }
+
+        self.cache_txt.insert(cache_key, output.clone()).await;
+
+        Ok(output)
     }
 }
 
@@ -319,18 +363,14 @@ fn sort_items(items: &mut Vec<Item>, ordering: &Vec<OrdItem>) {
         for ord in ordering.iter() {
             if OrderBy::Dir == ord.nm {
                 match cmp_item(&b.is_dir, &a.is_dir, &ord.asc) {
-                    Some(ord) => {
-                        return ord
-                    },
+                    Some(ord) => return ord,
                     None => continue
                 }
             } else if OrderBy::Name == ord.nm {
                 let a_ord = a.name.to_lowercase();
                 let b_ord = b.name.to_lowercase();
                 match cmp_item(&a_ord, &b_ord, &ord.asc) {
-                    Some(ord) => {
-                        return ord
-                    },
+                    Some(ord) => return ord,
                     None => continue
                 }
             } else if OrderBy::Ext == ord.nm && !a.is_dir {
@@ -339,13 +379,11 @@ fn sort_items(items: &mut Vec<Item>, ordering: &Vec<OrdItem>) {
                         let a_ord = a.to_lowercase();
                         let b_ord = b.to_lowercase();
                         match cmp_item(&a_ord, &b_ord, &ord.asc) {
-                            Some(ord) => {
-                                return ord
-                            },
+                            Some(ord) => return ord,
                             None => continue
                         }
                     }
-                    _ => { continue }
+                    _ => continue
                 }
             } else if OrderBy::Mime == ord.nm && !a.is_dir {
                 match (&a.mime, &b.mime) {
@@ -353,9 +391,7 @@ fn sort_items(items: &mut Vec<Item>, ordering: &Vec<OrdItem>) {
                         let a_ord = a.to_lowercase();
                         let b_ord = b.to_lowercase();
                         match cmp_item(&a_ord, &b_ord, &ord.asc) {
-                            Some(ord) => {
-                                return ord
-                            },
+                            Some(ord) => return ord,
                             None => continue
                         }
                     }
@@ -365,9 +401,7 @@ fn sort_items(items: &mut Vec<Item>, ordering: &Vec<OrdItem>) {
                 match (&a.size, &b.size) {
                     (Some(a), Some(b)) => {
                         match cmp_item(a, b, &ord.asc) {
-                            Some(ord) => {
-                                return ord
-                            },
+                            Some(ord) => return ord,
                             None => continue
                         }
                     }
@@ -380,8 +414,6 @@ fn sort_items(items: &mut Vec<Item>, ordering: &Vec<OrdItem>) {
         }
         return Ordering::Equal
     });
-
-
 }
 
 
@@ -456,6 +488,7 @@ mod tests {
         let api = Api::default();
         let params = Params {
             path_str: String::from(r"C:\Windows\WinSxS"),
+            // path_str: String::from(r"kkk"),
             // is_cache: false,
             ..Params::default()
         };
@@ -476,4 +509,14 @@ mod tests {
         //     },
         // };
     }
-}
+    #[tokio::test]
+    async fn test_state() {
+        let api = Api::default();
+        let s = api.set_state(String::from("a"), Some(String::from("1"))).await;
+        println!("{:?}", s);
+        let s = api.get_state(&String::from("a"), None).await;
+        println!("{:?}", s);
+    }
+
+
+    }

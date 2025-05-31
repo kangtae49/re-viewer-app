@@ -5,7 +5,30 @@
 
 export declare class FolderApi {
   constructor()
+  readText(pathStr: string): Promise<string>
   readFolder(jsonParams: string): Promise<string>
-  getState(jsonParams: string): Promise<string>
-  setState(jsonParams: string): Promise<string>
+  /**
+   *
+   * set state
+   *
+   * # arg
+   * - key
+   * - opt_val: if `None` then delete cache
+   *
+   * # Examples
+   * ```
+   * set_stat("key".to_string(), Some("val".to_string())
+   * set_state("key".to_string(), None)
+   * ```
+   */
+  setState(key: string, val?: string | undefined | null): Promise<string | null>
+  /**
+   *
+   * get state
+   *
+   * # arg
+   * - key
+   * - default_val: If the key does not exists in the cache, inserts the default value and return it.
+   */
+  getState(key: string, defaultVal?: string | undefined | null): Promise<string | null>
 }

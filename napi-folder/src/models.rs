@@ -144,28 +144,18 @@ impl Default for Params {
     }
 }
 
-#[allow(dead_code)]
-#[skip_serializing_none]
-#[serde_as]
-#[derive(TS, Serialize, Deserialize, Clone, Debug)]
-#[ts(export)]
-pub enum State {
-    None,
-    Number(Option<i64>),
-    Float(Option<f64>),
-    Text(Option<String>),
-    Bool(Option<bool>),
-}
 
-#[allow(dead_code)]
-#[skip_serializing_none]
-#[serde_as]
-#[derive(TS, Serialize, Deserialize, Clone, Debug)]
-#[ts(export)]
-pub struct StateParams {
-    pub key: String,
-    pub val: State,
-}
+
+// #[allow(dead_code)]
+// #[skip_serializing_none]
+// #[serde_as]
+// #[derive(TS, Serialize, Deserialize, Clone, Debug)]
+// #[ts(export)]
+// pub struct State {
+//     pub key: String,
+//     #[ts(optional)]
+//     pub val: Option<String>,
+// }
 
 #[derive(Error, Debug)]
 pub enum ApiError {
@@ -178,12 +168,8 @@ pub enum ApiError {
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
 
-    // #[error("JSON2 error: {0}")]
-    // Json2(#[from] serde_json::error::Error),
-
-
-    #[error("Custom error: {0}")]
-    Custom(String),
+    #[error("Folder error: {0}")]
+    Folder(String),
 
 }
 
@@ -200,13 +186,10 @@ impl From<ApiError> for NApiError {
                 NApiError::new(Status::InvalidArg, format!("JSON error: {}", e))
             }
 
-            // ApiError::Json2(e) => {
-            //     NApiError::new(Status::InvalidArg, format!("JSON2 error: {}", e))
-            // }
-
-            ApiError::Custom(msg) => {
+            ApiError::Folder(msg) => {
                 NApiError::new(Status::GenericFailure, msg)
             }
         }
     }
 }
+
