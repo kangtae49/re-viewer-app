@@ -34,6 +34,9 @@ import {IFolderAPI} from "./preload";
 import {createOptParams} from "./renderer_utils";
 
 const div_tree: HTMLDivElement = document.querySelector(".tree");
+const resizer: HTMLDivElement = document.querySelector(".resizer");
+const scroll: HTMLDivElement = document.querySelector(".scroll");
+const scroll_inner: HTMLDivElement = document.querySelector(".scroll .inner");
 const div_content: HTMLDivElement = document.querySelector(".content");
 
 declare global {
@@ -43,12 +46,6 @@ declare global {
 }
 const api = window.api;
 
-Split([div_tree, div_content], {
-    sizes: [30, 70],
-    minSize: 5,
-    gutterSize: 5,
-    cursor: 'col-resize',
-});
 
 const g_cache_nm = "folder_cache";
 const g_fetch_size = 5000;
@@ -59,11 +56,12 @@ const g_sep = "\\";
 
 window.addEventListener('DOMContentLoaded', async () => {
     console.log('onload');
+    resize_layout(200);
     // g_tree_order = await api.getState("ordering", g_tree_order);
     g_cur_path = await api.getCurPath();
     console.log(g_cur_path);
 
-    g_cur_path = "C:\\Windows\\WinSxS"; // TODO: debug
+    // g_cur_path = "C:\\Windows\\WinSxS"; // TODO: debug
     await render_folder(g_cur_path);
 
 });
@@ -101,6 +99,12 @@ const render_folder = async (dir: string) => {
             skip_n: i * g_fetch_size,
         }));
         render_items(base_li, folder);
+    }
+    scroll_inner.style.height = div_tree.scrollHeight + 'px';
+    if (div_tree.clientHeight == div_tree.scrollHeight) {
+        div_tree.style.displey = "none";
+    } else {
+        div_tree.style.display = "";
     }
 }
 
@@ -147,5 +151,46 @@ const path_nm = (obj: Folder | Item): string => {
     } else {
         const item: Item = obj;
         return item.nm;
+    }
+}
+
+
+let isDragging = false;
+
+resizer.addEventListener('mousedown', (e) => {
+    isDragging = true;
+    document.body.style.cursor = 'ew-resize';
+});
+
+document.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+    resize_layout(e.clientX);
+});
+
+document.addEventListener('mouseup', () => {
+    isDragging = false;
+    document.body.style.cursor = '';
+});
+
+scroll.addEventListener('scroll', () => {
+    div_tree.scrollTop = scroll.scrollTop;
+});
+
+const resize_layout = (left: number) => {
+    const minLeft = 0;
+    const maxLeft = window.innerWidth - 100;
+    const resizerLeft = Math.min(Math.max(left, minLeft), maxLeft);
+    const contentLeft = resizerLeft + 6;
+    const contentWidth = window.innerWidth - contentLeft;
+
+    resizer.style.left = resizerLeft + 'px';
+    scroll.style.left = (resizerLeft - 15) + 'px';
+    div_content.style.left = contentLeft + 'px'; // 6 = resizer width
+    div_content.style.width = contentWidth + 'px';
+
+    if (div_tree.clientHeight == div_tree.scrollHeight) {
+        div_tree.style.displey = "none";
+    } else {
+        div_tree.style.display = "";
     }
 }
