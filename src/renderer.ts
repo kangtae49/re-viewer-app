@@ -63,7 +63,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     g_cur_path = await api.getCurPath();
     console.log(g_cur_path);
 
-    // g_cur_path = "C:\\Windows\\WinSxS"; // TODO: debug
+    g_cur_path = "C:\\Windows\\WinSxS"; // TODO: debug
     await render_folder(g_cur_path);
 
 });
@@ -115,7 +115,7 @@ const render_items = (base_li: Element, folder: Folder) => {
 }
 
 const path_html = (obj: Folder | Item) => {
-    let item: Item = null;
+    let item: Item;
     let folder: Folder = null;
     if ("base_nm" in obj) {
         folder = obj;

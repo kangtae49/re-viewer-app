@@ -57,16 +57,13 @@ impl Api {
             .filter_map(|r| {
                 match r {
                     Ok(entry) => {
-                        Some(entry)
+                        Some(entry.path())
                     },
                     Err(err) => {
                         println!("err: {:?}", err);
                         None
                     }
                 }
-            })
-            .map(|entry| {
-                entry.path()
             })
             .collect()
             ;
@@ -142,11 +139,9 @@ impl Api {
             Ok(meta) => {
                 system_time = meta.modified().ok();
                 item.tm = system_time.map(|t|t.to_sec());
-                // item.size = Some(meta.len());
             },
             Err(_) => {
                 item.tm = None;
-                // item.size = None;
             }
         }
 
@@ -170,54 +165,33 @@ impl Api {
                 tm: cache_key.clone().tm,
             };
 
-            let opt_cache_val = self.cache_folder.get(&cache_key).await;
-
-            sorted_items = match opt_cache_val {
+            sorted_items = match self.cache_folder.get(&cache_key).await {
                 Some(mut cache_val) => {
-                    println!("hit cache");
+                    println!("hit cache folder");
                     if cache_val.ordering != ordering  {
-                        let paths = match self.cache_paths.get(&cache_paths_key).await {
-                            Some(paths) => paths,
-                            None => {
-                                self.get_entries(&abs).await.unwrap_or_else(|_err| vec![])
-                            }
-                        };
+                        let paths = self.get_cache_paths(&cache_paths_key).await;
                         let mut items_cache = paths.par_iter().map(|entry|as_item(entry, &meta_types)).collect::<Vec<Item>>();
                         sort_items(&mut items_cache, &ordering);
                         cache_val.items = items_cache;
-                        self.cache_folder.insert(cache_key.clone(), cache_val).await;
+                        self.cache_folder.insert(cache_key.clone(), cache_val.clone()).await;
                     }
-                    self.cache_folder.get(&cache_key).await.map(|v| v.items).unwrap_or(vec![])
+                    cache_val.items
                 }
                 None => {
-                    let paths = match self.cache_paths.get(&cache_paths_key).await {
-                        Some(paths) => paths,
-                        None => {
-                            let paths = self.get_entries(&abs).await.unwrap_or_else(|_err| vec![]);
-                            self.cache_paths.insert(cache_paths_key.clone(), paths.clone()).await;
-                            paths.clone()
-                        },
-                    };
-
+                    let paths = self.get_cache_paths(&cache_paths_key).await;
                     let mut items_new = paths.par_iter().map(|entry|as_item(entry, &meta_types)).collect::<Vec<Item>>();
                     sort_items(&mut items_new, &ordering);
                     let cache_val = CacheVal {
                         ordering: ordering.clone(),
-                        items: items_new,
+                        items: items_new.clone(),
                     };
-                    self.cache_folder.insert(cache_key.clone(), cache_val).await;
-                    self.cache_folder.get(&cache_key).await.map(|v| v.items).unwrap_or(vec![])
+                    self.cache_folder.insert(cache_key.clone(), cache_val.clone()).await;
+                    items_new
                 }
             };
         } else {
-            match self.get_entries(&abs).await {
-                Ok(paths) => {
-                    sorted_items = paths.par_iter().map(|entry|as_item(entry, &meta_types)).collect::<Vec<Item>>();
-                }
-                Err(_err) => {
-                    sorted_items = vec![]
-                }
-            }
+            let paths = self.get_entries(&abs).await.unwrap_or_default();
+            sorted_items = paths.par_iter().map(|entry|as_item(entry, &meta_types)).collect::<Vec<Item>>();
             sort_items(&mut sorted_items, &ordering);
         }
 
@@ -237,6 +211,20 @@ impl Api {
         folder.item.has = if meta_types.contains(&MetaType::Has) { Some(len_items > 0) } else { None };
 
         Ok(folder)
+    }
+
+    async fn get_cache_paths(&self, key: &CachePathsKey) -> Vec<PathBuf> {
+        match self.cache_paths.get(&key).await {
+            Some(paths) => {
+                println!("hit cache paths");
+                paths
+            },
+            None => {
+                let paths = self.get_entries(&key.path).await.unwrap_or_default();
+                self.cache_paths.insert(key.clone(), paths.clone()).await;
+                paths
+            },
+        }
     }
 
     pub async fn set_state(&self, key: String, opt_val: Option<String>) -> Result<Option<String>, ApiError> {
@@ -353,7 +341,6 @@ fn as_item(entry: &PathBuf, meta_types: &Vec<MetaType>) -> Item {
                 if meta_types.contains(&MetaType::Tm) {
                     tm = meta.modified().map(|t|t.to_sec()).ok();
                 }
-
             },
             Err(err) => {
                 // size = None;
@@ -386,55 +373,41 @@ fn cmp_item<T: Ord>(a: &T, b: &T, asc: &OrderAsc) -> Option<Ordering> {
     None
 }
 
+fn cmp_str_item(a: &String, b: &String, asc: &OrderAsc) -> Option<Ordering> {
+    let a = a.to_lowercase();
+    let b = b.to_lowercase();
+    cmp_item(&a, &b, asc)
+}
+
+fn cmp_opt_str_item(a: &Option<String>, b: &Option<String>, asc: &OrderAsc) -> Option<Ordering> {
+    match (a, b) {
+        (Some(a), Some(b)) => cmp_str_item(a, b, asc),
+        _ => None
+    }
+}
+
+fn cmp_opt_item<T: Ord>(a: &Option<T>, b: &Option<T>, asc: &OrderAsc) -> Option<Ordering> {
+    match (a, b) {
+        (Some(a), Some(b)) => cmp_item(a, b, asc),
+        _ => None
+    }
+}
+
+
+
 fn sort_items(items: &mut Vec<Item>, ordering: &Vec<OrdItem>) {
     items.sort_by(|a, b| {
         for ord in ordering.iter() {
-            if OrderBy::Dir == ord.nm {
-                match cmp_item(&b.dir, &a.dir, &ord.asc) {
-                    Some(ord) => return ord,
-                    None => continue
-                }
-            } else if OrderBy::Nm == ord.nm {
-                let a_ord = a.nm.to_lowercase();
-                let b_ord = b.nm.to_lowercase();
-                match cmp_item(&a_ord, &b_ord, &ord.asc) {
-                    Some(ord) => return ord,
-                    None => continue
-                }
-            } else if OrderBy::Ext == ord.nm && !a.dir {
-                match (&a.ext, &b.ext) {
-                    (Some(a), Some(b)) => {
-                        let a_ord = a.to_lowercase();
-                        let b_ord = b.to_lowercase();
-                        match cmp_item(&a_ord, &b_ord, &ord.asc) {
-                            Some(ord) => return ord,
-                            None => continue
-                        }
-                    }
-                    _ => continue
-                }
-            } else if OrderBy::Mt == ord.nm && !a.dir {
-                match (&a.mt, &b.mt) {
-                    (Some(a), Some(b)) => {
-                        let a_ord = a.to_lowercase();
-                        let b_ord = b.to_lowercase();
-                        match cmp_item(&a_ord, &b_ord, &ord.asc) {
-                            Some(ord) => return ord,
-                            None => continue
-                        }
-                    }
-                    _ => continue
-                }
-            } else if OrderBy::Sz == ord.nm && a.sz.ne(&b.sz) {
-                match (&a.sz, &b.sz) {
-                    (Some(a), Some(b)) => {
-                        match cmp_item(a, b, &ord.asc) {
-                            Some(ord) => return ord,
-                            None => continue
-                        }
-                    }
-                    _ => continue
-                }
+            let res = match ord.nm {
+                OrderBy::Dir => cmp_item(&b.dir, &a.dir, &ord.asc),
+                OrderBy::Nm => cmp_str_item(&a.nm, &b.nm, &ord.asc),
+                OrderBy::Ext if !a.dir => cmp_opt_str_item(&a.ext, &b.ext, &ord.asc),
+                OrderBy::Mt if !a.dir => cmp_opt_str_item(&a.mt, &b.mt, &ord.asc),
+                OrderBy::Sz if a.sz.ne(&b.sz)  => cmp_opt_item(&a.sz, &b.sz, &ord.asc),
+                _ => None,
+            };
+            if let Some(ord) = res {
+                return ord;
             }
         }
         if !ordering.iter().any(|o| o.nm == OrderBy::Nm) {
@@ -547,4 +520,4 @@ mod tests {
     }
 
 
-    }
+}
