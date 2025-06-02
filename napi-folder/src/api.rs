@@ -1,16 +1,18 @@
+use std::cmp;
 use std::cmp::Ordering;
+use std::net::ToSocketAddrs;
 use std::path::{Path, PathBuf};
 use std::path::Component::Prefix;
 use std::sync::OnceLock;
 use std::time::SystemTime;
-use std::fs;
-use std::io::{BufReader, Read};
-use chardetng::EncodingDetector;
-use mime_guess::from_path;
+use tokio;
+use tokio::io::AsyncReadExt;
+use mime_guess::{from_path};
 use encoding_rs::Encoding;
+use chardetng::EncodingDetector;
 use moka::future::Cache;
 use rayon::prelude::*;
-use crate::models::{MetaType, OrdItem, OrderAsc, OrderBy, CacheKey, CacheVal, CachePathsKey, CacheFileKey, Item, Folder, Params, ApiError};
+use crate::models::{MetaType, OrdItem, OrderAsc, OrderBy, CacheKey, CacheVal, CachePathsKey, Item, Folder, Params, TextContent, ApiError};
 use crate::path_ext::PathExt;
 use crate::system_time_ext::SystemTimeExt;
 
@@ -23,7 +25,6 @@ pub fn get_instance() -> &'static Api {
 pub struct Api {
     cache_folder: Cache<CacheKey, CacheVal>,
     cache_paths: Cache<CachePathsKey, Vec<PathBuf>>,
-    cache_txt: Cache<CacheFileKey, String>,
     state: Cache<String, String>,
 }
 
@@ -32,7 +33,6 @@ impl Default for Api {
         Api {
             cache_folder: Cache::new(100),
             cache_paths: Cache::new(100),
-            cache_txt: Cache::new(100),
             state: Cache::new(100),
         }
     }
@@ -45,14 +45,13 @@ impl Api {
         Api {
             cache_folder: Cache::new(100),
             cache_paths: Cache::new(100),
-            cache_txt: Cache::new(100),
             state: Cache::new(100),
         }
     }
 
 
     async fn get_entries<P: AsRef<Path>>(&self, p: P) -> Result<Vec<PathBuf>, ApiError> {
-        let dir = fs::read_dir(p.as_ref())?;
+        let dir = std::fs::read_dir(p.as_ref())?;
         let entries: Vec<PathBuf> = dir
             .filter_map(|r| {
                 match r {
@@ -196,9 +195,11 @@ impl Api {
         }
 
         let len_items = sorted_items.len();
-        let skip = skip_n.unwrap_or(0);
+        let mut skip = skip_n.unwrap_or(0);
+        skip = cmp::min(skip, len_items);
+
         let take = match take_n {
-            Some(n) => std::cmp::min(n, len_items - skip),
+            Some(n) => cmp::min(n, len_items - skip),
             None =>  len_items - skip
         };
         let items_sliced: Vec<Item> = sorted_items.iter().skip(skip).take(take).cloned().collect();
@@ -252,55 +253,64 @@ impl Api {
         }
     }
 
-    pub async fn read_txt(&self, path_str: &str) -> Result<String, ApiError> {
-        const CHUNK_SIZE: usize = 4096;
+    pub async fn read_txt(&self, path_str: &str) -> Result<TextContent, ApiError> {
+        let path = PathBuf::from(path_str);
 
-        // cache
-        let p = PathBuf::from(path_str);
-        let tm = p.metadata()?.modified()?;
-        let cache_file_key = CacheFileKey {
-            nm: "file".to_string(),
-            path: p.to_string_lossy().into(),
-            tm,
+        let mut file = tokio::fs::File::open(&path).await?;
+        let mut reader = tokio::io::BufReader::new(file);
+
+        let mut sample = vec![0u8; 16 * 1024];
+        let n = reader.read(&mut sample).await?;
+        sample.truncate(n);
+
+        let mime_type = match infer::get(&sample) {
+            Some(infer_type) => infer_type.mime_type().to_string(),
+            None => from_path(path_str).first_or_octet_stream().to_string()
         };
-        let opt_cache_val = self.cache_txt.get(&cache_file_key).await;
-        if let Some(content) = opt_cache_val {
-            return Ok(content)
-        };
 
-        let file = fs::File::open(p)?;
-        let mut reader = BufReader::new(file);
+        // let mut mime_type = from_path(path_str).first_or_octet_stream().to_string();
+        // if mime_type == "application/octet-stream" {
+        //     if let Some(infer_type) = infer::get(&sample) {
+        //         mime_type = infer_type.mime_type().to_string()
+        //     }
+        // }
 
-        let mut detector = EncodingDetector::new();
-        let mut detect_buf = [0u8; 8192];
-        let n = reader.read(&mut detect_buf)?;
-        detector.feed(&detect_buf[..n], n == 0);
-        let encoding: &Encoding = detector.guess(None, true);
+        println!("mime_type: {}", mime_type);
 
-        let mut output = String::new();
-        // let (decoded, had_errors) = encoding.decode_without_bom_handling(&detect_buf[..n]);
-        let (decoded, _, had_errors) = encoding.decode(&detect_buf[..n]);
-        if had_errors {
-            return Err(ApiError::Folder("encoding error".to_string()));
+        // application/octet-stream  인경우 기본적으로 안보이게 하나 file_size가 5M 미만인경우는 열기시도
+        let sz = path.metadata()?.len();
+        
+        if sz > 5 * 1024 * 1024 {
+            // return Err(ApiError::Folder(String::from("Err MimeType")))
+            Ok(TextContent {
+                path: path_str.to_string(),
+                mimetype: mime_type,
+                enc: None,
+                text: None
+            })
+        } else {
+            file = tokio::fs::File::open(&path).await?;
+            let mut buffer = Vec::new();
+            file.read_to_end(&mut buffer).await?;
+
+            let mut detector = EncodingDetector::new();
+            detector.feed(&buffer, true);
+            let encoding: &Encoding = detector.guess(None, true);
+
+            let (text, _, had_errors) = encoding.decode(&buffer);
+            let opt_text = if had_errors {
+                None
+            } else {
+                Some(text.into_owned())
+            };
+
+            Ok(TextContent {
+                path: path_str.to_string(),
+                mimetype: mime_type,
+                enc: Some(encoding.name().to_string()),
+                text: opt_text
+            })
         }
-        output.push_str(&decoded);
-
-        let mut buffer = [0u8; CHUNK_SIZE];
-        loop {
-            let n = reader.read(&mut buffer)?;
-            if n == 0 {
-                break;
-            }
-            let (decoded, had_errors) = encoding.decode_without_bom_handling(&buffer[..n]);
-            if had_errors {
-                return Err(ApiError::Folder("encoding error".to_string()));
-            }
-            output.push_str(&decoded);
-        }
-
-        self.cache_txt.insert(cache_file_key, output.clone()).await;
-
-        Ok(output)
     }
 }
 
@@ -519,5 +529,22 @@ mod tests {
         println!("{:?}", s);
     }
 
+    #[tokio::test]
+    async fn test_read_txt() {
+        let api = Api::default();
+        // let s = r"c:\docs\t1.cp949.txt";
+        // let s = r"c:\docs\t1.utf8.txt";
+        // let s = r"c:\docs\t1.json";
+        let s = r"C:\Users\kkt\Downloads\vite.main.config.ts";
+        // let s = r"C:\sources\sample\header-logo.png";
+        match api.read_txt(s).await {
+            Ok(text_content) => {
+                println!("{:?}", text_content);
+            },
+            Err(err) => {
+                println!("err: {:?}", err);
+            },
+        }
+    }
 
 }

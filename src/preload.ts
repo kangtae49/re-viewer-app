@@ -3,7 +3,7 @@
 
 
 import {contextBridge, ipcRenderer} from 'electron'
-import type {Folder, OptParams} from "bindings-folder"
+import type {Folder, OptParams, TextContent} from "bindings-folder"
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const {FolderApi} = require("napi-folder")
@@ -11,7 +11,7 @@ const {FolderApi} = require("napi-folder")
 export interface IFolderAPI {
     getCurPath: () => Promise<string>,
     readFolder: (params: OptParams) => Promise<Folder>,
-    readText: (pathStr: string) => Promise<string>,
+    readText: (pathStr: string) => Promise<TextContent>,
     setState: <T> (key: string, val: T) => Promise<T>,
     getState: <T> (key: string, default_val: object | undefined) => Promise<T>,
 }
@@ -24,8 +24,9 @@ const api: IFolderAPI = {
         return (new FolderApi()).readFolder(JSON.stringify(params))
             .then(JSON.parse)
     },
-    readText: async (pathStr: string): Promise<string> => {
+    readText: async (pathStr: string): Promise<TextContent> => {
         return (new FolderApi()).readText(pathStr)
+            .then(JSON.parse)
     },
     setState: async <T>(key: string, val: T): Promise<T> => {
         let str_val;

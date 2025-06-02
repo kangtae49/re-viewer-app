@@ -10,9 +10,7 @@ use napi_derive::napi;
 use napi::{Error as NApiError};
 use serde::{Serialize, Deserialize};
 use crate::api::get_instance;
-use crate::models::{
-  OrdItem, OrderAsc, OrderBy, MetaType, OptParams, Params, ApiError,
-};
+use crate::models::{OrdItem, OrderAsc, OrderBy, MetaType, OptParams, Params, ApiError, TextContent};
 
 
 
@@ -28,7 +26,8 @@ impl FolderApi {
 
   #[napi]
   pub async fn read_text(&self, path_str: String) -> Result<String, NApiError> {
-    get_instance().read_txt(&path_str).await.map_err(Into::<NApiError>::into)
+    let text_content: TextContent = get_instance().read_txt(&path_str).await.map_err(Into::<NApiError>::into)?;
+    self.from_obj(&text_content, false).map_err(Into::<NApiError>::into)      
   }
 
   #[napi]

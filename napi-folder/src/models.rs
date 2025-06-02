@@ -124,6 +124,21 @@ pub struct Item {
 #[allow(dead_code)]
 #[skip_serializing_none]
 #[serde_as]
+#[derive(TS, Serialize, Clone, Debug, Default)]
+#[ts(export)]
+pub struct TextContent {
+    pub path: String,
+    pub mimetype: String,
+    #[ts(optional)]
+    pub enc: Option<String>,
+    #[ts(optional)]
+    pub text: Option<String>,
+}
+
+
+#[allow(dead_code)]
+#[skip_serializing_none]
+#[serde_as]
 #[derive(TS, Serialize, Deserialize, Clone, Debug, Default)]
 #[ts(export)]
 pub struct OptParams {
