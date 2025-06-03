@@ -28,7 +28,7 @@
 
 import "./resources/fontawesome/css/all.min.css";
 import './index.css';
-import type {OrdItem, Folder, MetaType, Item} from "bindings-folder"
+import type {OrdItem, Folder, MetaType, Item} from "../napi-folder/bindings"
 import {IFolderAPI} from "./preload";
 import {createOptParams} from "./renderer_utils";
 
@@ -62,6 +62,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     console.log(g_cur_path);
 
     // g_cur_path = "C:\\Windows\\WinSxS"; // TODO: debug
+    // g_cur_path = "C:\\"; // TODO: debug
     await renderFolder(g_cur_path, "reload");
 
     div_tree.addEventListener("click", clickEvent);
@@ -69,7 +70,6 @@ window.addEventListener('DOMContentLoaded', async () => {
 })
 
 const renderFolder = async (dir: string, click_type: string) => {
-    console.log(`renderFolder: ${dir}`);
     let div_target: HTMLDivElement = document.querySelector(`.tree div.item[data-path="${CSS.escape(dir)}"]`);
     const div_items = div_target?.querySelector(".item .items");
     const reload = click_type == "reload" || (click_type == "toggle" && !div_items);
@@ -88,13 +88,14 @@ const renderFolder = async (dir: string, click_type: string) => {
                 meta_types: g_tree_meta,
                 skip_n: skip_n,
             }));
-            const base_path = folder.item.nm == "" ? folder.base_nm : [folder.base_nm, folder.item.nm].join(g_sep);
+            const base_path = folder.item.nm == "" ? [folder.base_nm, folder.item.nm].join(g_sep) : folder.base_nm;
             if (!div_target) {
                 const div_item = item_dom(folder.item, base_path);
                 div_tree.appendChild(div_item);
                 div_target = div_item;
             }
-            render_items(div_target, folder.item.items, base_path);
+            const base_path_for_items = [base_path, folder.item.nm].join(g_sep);
+            render_items(div_target, folder.item.items, base_path_for_items);
             tot_take += folder.take_n;
             if (folder.tot == tot_take) {
                 break;
@@ -248,7 +249,6 @@ const clickEvent = async (e: Event) => {
 
     const dataset = div_item.dataset;
     if (dataset.dir && tagName == "I") {  // click dir icon
-        console.log(dataset.path);
         await renderFolder(dataset.path, "toggle");
     } else if (dataset.dir && tagName == "DIV") {  // click dir label
 
@@ -265,46 +265,60 @@ const viewFile = async (div_item: HTMLDivElement) => {
     const dataset = div_item.dataset;
     div_content.innerHTML = "";
     if (dataset.mt.startsWith("image/")) {
-        embedImage("image", dataset);
+        viewImg(dataset);
     } else if (dataset.mt.endsWith("/pdf")) {
-        embedPdf("pdf", dataset);
+        viewEmbed(dataset);
     } else if (dataset.mt.endsWith("/html")) {
-        embedHtml("html", dataset);
+        viewHtml(dataset);
     } else if (dataset.mt.endsWith("/json")) {
-        embedIframe("iframe", dataset);
+        viewIframe(dataset);
+    } else if (dataset.mt.endsWith("/xml")) {
+        viewText(dataset);
     } else if (dataset.mt.startsWith("audio/") && Number(dataset.sz) > 1024*500) {
-        embedVideo("audio", dataset);
+        viewMedia(dataset);
     } else if (dataset.mt.startsWith("video/") && Number(dataset.sz) > 1024*500) {
-        embedVideo("video", dataset);
+        viewMedia(dataset);
     } else if (Number(dataset.sz) < 1024*500) {
-        embedHtml("html", dataset);
-        // embedIframe("iframe", dataset);
+        viewText(dataset);
     } else {
-        embedHtml("html", dataset);
-        // embedIframe("iframe", dataset);
+        viewNone(dataset);
     }
 }
 
-const embedImage = (nm: "image", dataset: DOMStringMap) => {
-    div_content.dataset.type = nm;
+const viewImg = (dataset: DOMStringMap) => {
+    div_content.dataset.type = "img";
+    div_content.dataset.mt = dataset.mt;
     const div_img = document.createElement("img");
     div_img.src = dataset.path;
     div_img.title = dataset.path;
     div_content.appendChild(div_img);
 }
 
-const embedPdf = (nm: "pdf", dataset: DOMStringMap) => {
-    div_content.dataset.type = nm;
+const viewEmbed = (dataset: DOMStringMap) => {
+    div_content.dataset.type = "embed";
+    div_content.dataset.mt = dataset.mt;
     const div_embed = document.createElement("embed");
     div_embed.src = dataset.path;
     div_embed.title = dataset.path;
     div_embed.type = dataset.mt;
+
+    const div_overlay = document.createElement("div");
+    div_overlay.classList.add("iframe-overlay");
+    div_content.appendChild(div_overlay);
+
     div_content.appendChild(div_embed);
 }
 
-const embedVideo = (nm: "audio" | "video", dataset: DOMStringMap) => {
-    div_content.dataset.type = nm;
-    const div_embed = document.createElement(nm);
+const viewMedia = (dataset: DOMStringMap) => {
+    div_content.dataset.type = "media";
+    div_content.dataset.mt = dataset.mt;
+    const nm = dataset.mt.split("/")[0];
+    let div_embed;
+    if (nm == "audio") {
+        div_embed = document.createElement("audio");
+    } else {
+        div_embed = document.createElement("video");
+    }
     div_embed.controls = true;
     div_embed.autoplay = true;
     div_embed.volume = 0.5;
@@ -314,9 +328,10 @@ const embedVideo = (nm: "audio" | "video", dataset: DOMStringMap) => {
     div_embed.appendChild(source);
     div_content.appendChild(div_embed);
 }
-const embedIframe = (nm: "iframe", dataset: DOMStringMap) => {
-    div_content.dataset.type = nm;
-    const div_embed = document.createElement(nm);
+const viewIframe = (dataset: DOMStringMap) => {
+    div_content.dataset.type = "iframe";
+    div_content.dataset.mt = dataset.mt;
+    const div_embed = document.createElement("iframe");
     div_embed.src = dataset.path;
 
     const div_overlay = document.createElement("div");
@@ -325,8 +340,9 @@ const embedIframe = (nm: "iframe", dataset: DOMStringMap) => {
     div_content.appendChild(div_embed);
 }
 
-const embedHtml = (nm: "html", dataset: DOMStringMap) => {
-    div_content.dataset.type = nm;
+const viewHtml = (dataset: DOMStringMap) => {
+    div_content.dataset.type = "html";
+    div_content.dataset.mt = dataset.mt;
     api.readText(dataset.path)
         .then((textContent) => {
             console.log(textContent.mimetype, textContent.enc);
@@ -337,4 +353,24 @@ const embedHtml = (nm: "html", dataset: DOMStringMap) => {
             div_content.classList.add("html");
             div_content.innerHTML = reason;
         })
+}
+
+const viewText = (dataset: DOMStringMap) => {
+    div_content.dataset.type = "text";
+    div_content.dataset.mt = dataset.mt;
+    api.readText(dataset.path)
+        .then((textContent) => {
+            console.log(textContent.mimetype, textContent.enc);
+            div_content.innerText = textContent.text;
+        })
+        .catch((reason) => {
+            console.log(reason);
+            div_content.classList.add("text");
+            div_content.innerText = reason;
+        })
+}
+
+const viewNone = (dataset: DOMStringMap) => {
+    div_content.dataset.type = "none";
+    div_content.innerHTML = "";
 }

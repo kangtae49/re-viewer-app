@@ -38,9 +38,7 @@
     "vite": "^6.3.5"
   },
   "dependencies": {
-    "bindings-folder": "./napi-folder/bindings",
     "electron-squirrel-startup": "^1.0.1",
-    "napi-folder": "./napi-folder",
     "split.js": "^1.6.5"
   }
 }

@@ -7,13 +7,19 @@ export const getCurPath = async (argv: string[], isPackaged: boolean): Promise<s
     if (args.length > 0) {
         path_str = args[0];
     }
-    console.log(args.length);
-    console.log(path_str);
-    const stats = await stat(path_str);
+    const absolutePath = path.resolve(path_str);
+
+    const stats = await stat(absolutePath);
     if (stats.isDirectory()){
-        return path_str;
+        const nm = path.basename(absolutePath);
+        const dirname = path.dirname(absolutePath);
+        if (nm == "") {
+            return [dirname, nm].join(path.sep);
+        } else {
+            return dirname;
+        }
     } else {
-        return path.dirname(path_str);
+        return path.dirname(absolutePath);
     }
 };
 

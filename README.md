@@ -9,21 +9,20 @@ npm run start
 ```
 
 ## NAPI 
-re-viewer-app/package.json
+re-viewer-app/src/preload.js
+```ts
+import type {Folder, OptParams, TextContent} from "../napi-folder/bindings"
 
-```json
-{
-  "scripts": {
-    "start": "electron ."
-  },
-  "dependencies": {
-    "napi-folder": "./napi-folder",
-    "bindings-folder": "./napi-folder/bindings"
-  }
-}
+// __dirname: re-viewer-app\.vite\build
+const isDev = process.env.NODE_ENV === "development";
+const nativePath = isDev
+? path.join(__dirname, "../../napi-folder")
+: path.join(process.resourcesPath, "napi-folder");
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const {FolderApi} = require(nativePath);
 ```
 
-main.js
+re-viewer-app/src/main.js
 ```js
 const mainWindow = new BrowserWindow({
     webPreferences: {
@@ -39,9 +38,3 @@ npm run make
 npm run publish
 ```
 
-```js
-await folderApi.readFolder({path_str: "C:/"})
-await folderApi.setStatus({key: "a", val: {"Text": "------------" }})
-await folderApi.getStatus({key: "a", val: "None"})
-
-```

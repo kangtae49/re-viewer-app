@@ -28,14 +28,13 @@ html, body { margin: 0; padding: 0; width:100%; height: 100%; }
 
 .content[data-type="text"] { white-space: pre-wrap; font-size: 0.9em; font-family: "Fira Code", "JetBrains Mono", Consolas, "Courier New", monospace; font-feature-settings: "liga" on; }
 .content[data-type="html"] { }
-.content[data-type="image"] { width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; overflow: hidden; }
-.content[data-type="image"] img { max-width: 100%; max-height: 100%; width: auto; height: auto; display: block; }
+.content[data-type="img"] { width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; overflow: hidden; }
+.content[data-type="img"] img { max-width: 100%; max-height: 100%; width: auto; height: auto; display: block; }
 
-.content[data-type="pdf"] embed { width: 100%; height: 100%; }
-.content[data-type="audio"] { width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; overflow: hidden }
-.content[data-type="audio"] audio {  }
-.content[data-type="video"] { width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; overflow: hidden }
-.content[data-type="video"] video { width: 100%; height: 100%; }
+.content[data-type="embed"] embed { width: calc(100% - 5px); height: calc(100% - 5px); }
+.content[data-type="media"] { width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; overflow: hidden }
+.content[data-type="media"] audio {  }
+.content[data-type="media"] video { width: 100%; height: 100%; }
 
 .content[data-type="iframe"] { width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; overflow: hidden }
 .content[data-type="iframe"] iframe { width: 100%; height: 100%; }

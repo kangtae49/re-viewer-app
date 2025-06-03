@@ -10,6 +10,14 @@ import { FuseV1Options, FuseVersion } from '@electron/fuses';
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
+    extraResource: [
+        './napi-folder/index.js',
+        './napi-folder/index.d.ts',
+        './napi-folder/napi-folder.node',
+        './napi-folder/napi-folder.win32-x64-msvc.node',
+        './napi-folder/package.json',
+      // './napi-folder'
+    ],
   },
   rebuildConfig: {},
   makers: [new MakerSquirrel({}), new MakerZIP({}, ['darwin']), new MakerRpm({}), new MakerDeb({})],

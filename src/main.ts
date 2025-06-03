@@ -22,6 +22,7 @@ const createWindow = () => {
   });
 
   mainWindow.webContents.on('will-navigate', (event, url) => {
+    console.log(url);
     if (url.startsWith('http')) {
       event.preventDefault();
       const child = new BrowserWindow({

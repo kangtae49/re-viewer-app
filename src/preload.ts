@@ -3,10 +3,17 @@
 
 
 import {contextBridge, ipcRenderer} from 'electron'
-import type {Folder, OptParams, TextContent} from "bindings-folder"
+import path from "path";
+import type {Folder, OptParams, TextContent} from "../napi-folder/bindings"
 
+// __dirname: re-viewer-app\.vite\build
+const isDev = process.env.NODE_ENV === "development";
+const nativePath = isDev
+    ? path.join(__dirname, "../../napi-folder")
+    : path.join(process.resourcesPath, "napi-folder");
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const {FolderApi} = require("napi-folder")
+const {FolderApi} = require(nativePath);
+
 
 export interface IFolderAPI {
     getCurPath: () => Promise<string>,
