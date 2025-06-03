@@ -33,6 +33,8 @@ import {IFolderAPI} from "./preload";
 import {createOptParams} from "./renderer_utils";
 
 const div_tree: HTMLDivElement = document.querySelector(".tree");
+const div_left: HTMLDivElement = document.querySelector(".left");
+const div_right: HTMLDivElement = document.querySelector(".right");
 const resizer: HTMLDivElement = document.querySelector(".resizer");
 
 const scroll: HTMLDivElement = document.querySelector(".scroll");
@@ -213,28 +215,32 @@ window.addEventListener('resize', () => {
 });
 
 const resizeLayout = (left: number | undefined = undefined) => {
-    const default_left = 200;
-    const resizer_width = 6;
-    const scroll_width = 15;
+    const defaultLeft = 200;
+    const resizerWidth = 6;
+    const scrollWidth = 18;
 
     if (left === undefined) {
         left = resizer.offsetLeft;
     }
     if (left == 0) {
-        left = default_left;  // default
+        left = defaultLeft;  // default
     }
 
     const minLeft = 0;
     const maxLeft = window.innerWidth; // - 100;
     const resizerLeft = Math.min(Math.max(left, minLeft), maxLeft);
-    const contentLeft = resizerLeft + resizer_width;
+    const contentLeft = resizerLeft + resizerWidth;
     const contentWidth = window.innerWidth - contentLeft;
 
     resizer.style.left = resizerLeft + 'px';
-    scroll.style.left = (resizerLeft - scroll_width) + 'px';
-    div_content.style.left = contentLeft + 'px';
-    div_content.style.width = contentWidth + 'px';
+    div_right.style.left = contentLeft + 'px';
+    div_right.style.width = contentWidth + 'px';
 
+    scroll.style.left = (resizerLeft - scrollWidth) + 'px';
+    scroll.style.height = div_tree.clientHeight + 'px';
+    // scroll.style.top = 28 + 'px';
+    // scroll.style.bottom = 28 + div_tree.clientHeight + 'px';
+    scroll.style.width = scrollWidth + 'px';
     if (div_tree.clientHeight == div_tree.scrollHeight) {
         scroll.style.display = "none";
     } else {
@@ -263,7 +269,7 @@ const clickEvent = async (e: Event) => {
         if (mouseEvent.offsetX < 0) {
             const parentItem: HTMLDivElement = target.closest('.item');
             parentItem.querySelector("i").click();
-            updateSelectedPath(parentItem, "center");
+            updateSelectedPath(parentItem);
         }
         return;
     }
@@ -288,6 +294,7 @@ const clickEvent = async (e: Event) => {
 
 const viewFile = async (div_item: HTMLDivElement) => {
     const dataset = div_item.dataset;
+    updateContentTitle(dataset);
     div_content.innerHTML = "";
     if (dataset.mt.startsWith("image/")) {
         viewImg(dataset);
@@ -401,7 +408,7 @@ const viewNone = (dataset: DOMStringMap) => {
     div_content.innerHTML = "";
 }
 
-const updateSelectedPath = (target: string | HTMLDivElement, pos: ScrollLogicalPosition = "start") => {
+const updateSelectedPath = (target: string | HTMLDivElement, pos: ScrollLogicalPosition = "center") => {
     const cur_selected: HTMLDivElement = div_tree.querySelector(".item.selected");
     let new_selected: HTMLDivElement;
     if (typeof target == "string") {
@@ -413,7 +420,7 @@ const updateSelectedPath = (target: string | HTMLDivElement, pos: ScrollLogicalP
     cur_selected?.classList.remove("selected");
     new_selected?.classList.add("selected");
 
-    new_selected.scrollIntoView({ behavior: 'auto', block: pos, inline: 'end' });
+    new_selected?.querySelector(".label").scrollIntoView({ behavior: 'auto', block: pos, inline: 'end' });
     console.log(`scrollIntoView ${pos}`);
 }
 
@@ -464,10 +471,14 @@ const keydownEvent = async (e: Event) => {
         } else {
             item_selected?.querySelector("i").click();
         }
-        updateSelectedPath(item_selected, "center");
+        updateSelectedPath(item_selected);
 
     } else if (e.key === " ") {
         item_selected?.querySelector(".label").click();
     }
 
+}
+
+const updateContentTitle = (dataset: DOMStringMap) => {
+    document.querySelector(".right .top").innerHTML = dataset.path;
 }
