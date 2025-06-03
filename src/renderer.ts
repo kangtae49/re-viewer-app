@@ -70,8 +70,9 @@ window.addEventListener('DOMContentLoaded', async () => {
     // g_cur_path = "C:\\"; // TODO: debug
 
     await renderFolder(g_cur_path, "reload");
-    updateSelectedPath(g_cur_path);
+    div_tree.focus();
     div_tree.addEventListener("click", clickEvent);
+    div_tree.addEventListener("keydown", keydownEvent);
 
 })
 
@@ -106,14 +107,20 @@ const renderFolder = async (dir: string, click_type: string) => {
                 break;
             }
         }
+        updateSelectedPath(div_target);
     }
 
+    resizeLayout();
+    /*
     scroll_inner.style.height = div_tree.scrollHeight + 'px';
     if (div_tree.clientHeight == div_tree.scrollHeight) {
         scroll.style.display = "none";
     } else {
         scroll.style.display = "";
     }
+     */
+
+
 }
 
 
@@ -233,6 +240,14 @@ const resizeLayout = (left: number | undefined = undefined) => {
     } else {
         scroll.style.display = "";
     }
+
+    scroll_inner.style.height = div_tree.scrollHeight + 'px';
+    if (div_tree.clientHeight == div_tree.scrollHeight) {
+        scroll.style.display = "none";
+    } else {
+        scroll.style.display = "";
+    }
+
 }
 
 const clickEvent = async (e: Event) => {
@@ -253,11 +268,13 @@ const clickEvent = async (e: Event) => {
         return;
     }
 
-    updateSelectedPath(div_item);
+    if (target.classList.contains('item')) {
+        return;
+    }
+
     if (dataset.dir && tagName == "I") {  // click dir icon
         await renderFolder(dataset.path, "toggle");
     } else if (dataset.dir && tagName == "DIV") {  // click dir label
-
     } else if (!dataset.dir && tagName == "I") {
         await viewFile(div_item);
     } else if (!dataset.dir && tagName == "DIV" && target.classList.contains('label')) {  // click file label
@@ -265,6 +282,8 @@ const clickEvent = async (e: Event) => {
     } else {
         return;
     }
+
+
 }
 
 const viewFile = async (div_item: HTMLDivElement) => {
@@ -382,7 +401,7 @@ const viewNone = (dataset: DOMStringMap) => {
     div_content.innerHTML = "";
 }
 
-const updateSelectedPath = (target: string | HTMLDivElement, pos: ScrollLogicalPosition = "nearest") => {
+const updateSelectedPath = (target: string | HTMLDivElement, pos: ScrollLogicalPosition = "start") => {
     const cur_selected: HTMLDivElement = div_tree.querySelector(".item.selected");
     let new_selected: HTMLDivElement;
     if (typeof target == "string") {
@@ -393,5 +412,62 @@ const updateSelectedPath = (target: string | HTMLDivElement, pos: ScrollLogicalP
     if (cur_selected == new_selected) return;
     cur_selected?.classList.remove("selected");
     new_selected?.classList.add("selected");
+
     new_selected.scrollIntoView({ behavior: 'auto', block: pos, inline: 'end' });
+    console.log(`scrollIntoView ${pos}`);
+}
+
+const keydownEvent = async (e: Event) => {
+    const keys = ["Enter", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "];
+    if(keys.includes(e.key)){
+        e.stopPropagation();
+        e.preventDefault();
+    } else {
+        return;
+    }
+    const item_selected: HTMLDivElement = div_tree.querySelector(".item.selected");
+    if (e.key === "Enter") {
+        if (item_selected.dataset.dir) {
+            item_selected.querySelector("i").click();
+        } else {
+            item_selected.querySelector(".label").click();
+        }
+    } else if (e.key === "ArrowUp") {
+        const arr = Array.from(div_tree.querySelectorAll(".item"));
+        const idx = arr.indexOf(item_selected);
+        const prev_idx = Math.max(idx-1, 0);
+        if (idx != prev_idx) {
+            updateSelectedPath(arr[prev_idx]);
+        }
+    } else if (e.key === "ArrowDown") {
+        const arr = Array.from(div_tree.querySelectorAll(".item"));
+        const idx = arr.indexOf(item_selected);
+        const next_idx = Math.min(idx+1, arr.length-1);
+        if (idx != next_idx) {
+            updateSelectedPath(arr[next_idx]);
+        }
+    } else if (e.key === "ArrowLeft") {
+        const parent = item_selected.closest(".items").closest(".item");
+        const has_items = item_selected.querySelector(".item") != null;
+        if (item_selected.dataset.dir && has_items) {
+            item_selected?.querySelector("i").click();
+
+            const new_item_selected: HTMLDivElement = div_tree.querySelector(".item.selected");
+            updateSelectedPath(new_item_selected);
+        } else {
+            parent?.querySelector("i").click();
+            updateSelectedPath(parent);
+        }
+    } else if (e.key === "ArrowRight") {
+        if (item_selected.dataset.dir) {
+            item_selected?.querySelector("i").click();
+        } else {
+            item_selected?.querySelector("i").click();
+        }
+        updateSelectedPath(item_selected, "center");
+
+    } else if (e.key === " ") {
+        item_selected?.querySelector(".label").click();
+    }
+
 }
