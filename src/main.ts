@@ -8,10 +8,11 @@ if (started) {
   app.quit();
 }
 
+let mainWindow: BrowserWindow;
 
 const createWindow = () => {
   // Create the browser window.
-  const mainWindow = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 800,
     height: 600,
     webPreferences: {
@@ -19,19 +20,6 @@ const createWindow = () => {
       sandbox: false,
       webSecurity: false,
     },
-  });
-
-  mainWindow.webContents.on('will-navigate', (event, url) => {
-    console.log(url);
-    if (url.startsWith('http')) {
-      event.preventDefault();
-      const child = new BrowserWindow({
-
-        width: 800,
-        height: 600,
-      });
-      child.loadURL(url);
-    }
   });
 
 
@@ -50,6 +38,23 @@ const createWindow = () => {
 
   // Open the DevTools.
   // mainWindow.webContents.openDevTools();
+
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    const url_str = url.toString();
+    if (url_str === mainWindow.webContents.getURL()) {
+      return;
+    }
+    if (url_str.startsWith('http')) {
+      event.preventDefault();
+      const child = new BrowserWindow({
+        width: 800,
+        height: 600,
+      });
+      child.loadURL(url);
+    }
+  });
+
+
 };
 
 // This method will be called when Electron has finished

@@ -1,6 +1,5 @@
 use std::cmp;
 use std::cmp::Ordering;
-use std::net::ToSocketAddrs;
 use std::path::{Path, PathBuf};
 use std::path::Component::Prefix;
 use std::sync::OnceLock;

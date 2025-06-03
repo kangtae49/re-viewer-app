@@ -10,17 +10,20 @@ export const getCurPath = async (argv: string[], isPackaged: boolean): Promise<s
     const absolutePath = path.resolve(path_str);
 
     const stats = await stat(absolutePath);
+    let basePath: string;
     if (stats.isDirectory()){
         const nm = path.basename(absolutePath);
         const dirname = path.dirname(absolutePath);
         if (nm == "") {
-            return [dirname, nm].join(path.sep);
+
+            basePath = dirname;
         } else {
-            return dirname;
+            basePath = [dirname, nm].join(path.sep);
         }
     } else {
-        return path.dirname(absolutePath);
+        basePath = path.dirname(absolutePath);
     }
+    return basePath;
 };
 
 
