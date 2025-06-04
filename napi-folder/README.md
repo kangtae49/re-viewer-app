@@ -1,7 +1,6 @@
 ```sh
 napi new napi-folder
-napi build --release
-napi build --platform
+napi build --platform --release
 ```
 
 

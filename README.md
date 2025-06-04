@@ -9,6 +9,21 @@ npm run start
 ```
 
 ## NAPI 
+re-viewer-app/forge.config.ts
+```ts
+const config: ForgeConfig = {
+  packagerConfig: {
+    asar: true,
+    extraResource: [
+        './napi-folder/index.js',
+        './napi-folder/index.d.ts',
+        './napi-folder/napi-folder.win32-x64-msvc.node',
+        './napi-folder/package.json',
+    ],
+  }
+ }
+```
+
 re-viewer-app/src/preload.js
 ```ts
 import type {Folder, OptParams, TextContent} from "../napi-folder/bindings"

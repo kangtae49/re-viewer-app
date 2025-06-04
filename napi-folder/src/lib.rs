@@ -5,7 +5,6 @@ mod path_ext;
 mod system_time_ext;
 mod api;
 
-// use std::future::Future;
 use napi_derive::napi;
 use napi::{Error as NApiError};
 use serde::{Serialize, Deserialize};

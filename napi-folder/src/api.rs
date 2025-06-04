@@ -83,10 +83,8 @@ impl Api {
 
         let mut folder = Folder::default();
         let mut abs = std::path::absolute(PathBuf::from(path_str))?;
-        if !abs.exists() {
-            return Err(ApiError::Folder(String::from("Not Exists Path")))
-        }
-        if abs.is_file() {  // file -> dir
+        let is_file = abs.is_file();
+        if is_file {  // file -> dir
             abs.pop();
         }
 
@@ -131,7 +129,7 @@ impl Api {
 
         let mut item = Item::default();
         item.nm = item_name;
-        item.dir = abs.is_dir();
+        item.dir = !is_file;
         let mut system_time : Option<SystemTime> = None;
         match abs.metadata() {
             Ok(meta) => {
@@ -474,9 +472,9 @@ mod tests {
     #[tokio::test]
     async fn test_entries() {
         let api = Api::default();
-        let s = r"C:\Windows\WinSxS";
+        // let s = r"/C:\Windows\WinSxS";
         // let s = r"C://MSOCache";
-        // let s = r"C://";
+        let s = r"C://";
         // assert!(api.get_items(PathBuf::from(s)).await.is_err());
         assert!(api.get_entries(PathBuf::from(s)).await.is_ok());
     }
@@ -503,8 +501,8 @@ mod tests {
             ..Params::default()
         };
         match api.get_folder(&params).await {
-            Ok(_) => {
-                println!("ok");
+            Ok(res) => {
+                println!("ok:  {:?}", res);
             },
             Err(err) => {
                 println!("err: {:?}", err);

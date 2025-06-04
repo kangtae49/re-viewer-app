@@ -81,18 +81,14 @@ pub struct CacheVal {
 #[allow(dead_code)]
 #[skip_serializing_none]
 #[derive(TS, Serialize, Debug, Default)]
-#[ts(export)]
+#[ts(export, optional_fields)]
 pub struct Folder {
     pub item: Item,
     pub path_param: String,
     pub base_nm: String,
-    #[ts(optional)]
     pub tot: Option<usize>,
-    #[ts(optional)]
     pub skip_n: Option<usize>,
-    #[ts(optional)]
     pub take_n: Option<usize>,
-    #[ts(optional)]
     pub ordering: Option<Vec<OrdItem>>,
 }
 
@@ -101,23 +97,16 @@ pub struct Folder {
 #[skip_serializing_none]
 #[serde_as]
 #[derive(TS, Serialize, Clone, Debug, Default)]
-#[ts(export)]
+#[ts(export, optional_fields)]
 pub struct Item {
     pub nm: String,
     pub dir: bool,
-    #[ts(optional)]
     pub ext: Option<String>,
-    #[ts(optional)]
     pub mt: Option<String>,
-    #[ts(optional)]
     pub sz: Option<u64>,  // u64
-    #[ts(optional)]
     pub cnt: Option<usize>,  // usize
-    #[ts(optional)]
     pub has: Option<bool>,
-    #[ts(optional)]
     pub tm: Option<u64>,  // u64
-    #[ts(optional)]
     pub items: Option<Vec<Item>>
 }
 
@@ -125,13 +114,11 @@ pub struct Item {
 #[skip_serializing_none]
 #[serde_as]
 #[derive(TS, Serialize, Clone, Debug, Default)]
-#[ts(export)]
+#[ts(export, optional_fields)]
 pub struct TextContent {
     pub path: String,
     pub mimetype: String,
-    #[ts(optional)]
     pub enc: Option<String>,
-    #[ts(optional)]
     pub text: Option<String>,
 }
 
@@ -140,7 +127,7 @@ pub struct TextContent {
 #[skip_serializing_none]
 #[serde_as]
 #[derive(TS, Serialize, Deserialize, Clone, Debug, Default)]
-#[ts(export)]
+#[ts(export, optional_fields)]
 pub struct OptParams {
     pub path_str: Option<String>,
     pub meta_types: Option<Vec<MetaType>>,

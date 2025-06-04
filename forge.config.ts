@@ -13,10 +13,8 @@ const config: ForgeConfig = {
     extraResource: [
         './napi-folder/index.js',
         './napi-folder/index.d.ts',
-        './napi-folder/napi-folder.node',
         './napi-folder/napi-folder.win32-x64-msvc.node',
         './napi-folder/package.json',
-      // './napi-folder'
     ],
   },
   rebuildConfig: {},

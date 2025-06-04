@@ -14,7 +14,7 @@ tokio = { version = "1.45.1", features = ["macros", "fs", "io-util", "rt-multi-t
 serde = { version = "1.0.219", features = ["derive"] }
 serde_with = "3.12.0"
 serde_json = "1.0.140"
-ts-rs = { version = "10.1.0", features = ["no-serde-warnings"] }
+ts-rs = { version = "11.0.0", features = ["no-serde-warnings"] }
 moka = { version = "0.12.10", features = ["future"] }
 rayon = "1.10.0"
 mime_guess = { version = "2.0.5" }

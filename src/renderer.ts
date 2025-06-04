@@ -30,7 +30,6 @@ import "./resources/fontawesome/css/all.min.css";
 import './index.css';
 import type {OrdItem, Folder, MetaType, Item} from "../napi-folder/bindings"
 import {IFolderAPI} from "./preload";
-import {createOptParams} from "./renderer_utils";
 
 const div_tree: HTMLDivElement = document.querySelector(".tree");
 const div_left: HTMLDivElement = document.querySelector(".left");
@@ -89,13 +88,13 @@ const renderFolder = async (dir: string, click_type: string) => {
         console.log("reload");
         let tot_take = 0;
         for (const skip_n of [0, g_fetch_size]) {
-            const folder: Folder = await api.readFolder(createOptParams({
+            const folder: Folder = await api.readFolder({
                 cache_nm: g_cache_nm,
                 path_str: dir,
                 ordering: g_tree_order,
                 meta_types: g_tree_meta,
                 skip_n: skip_n,
-            }));
+            });
             const base_path = folder.base_nm;
             if (!div_target) {
                 const div_item = item_dom(folder.item, base_path);
@@ -109,19 +108,9 @@ const renderFolder = async (dir: string, click_type: string) => {
                 break;
             }
         }
-        updateSelectedPath(div_target);
     }
-
     resizeLayout();
-    /*
-    scroll_inner.style.height = div_tree.scrollHeight + 'px';
-    if (div_tree.clientHeight == div_tree.scrollHeight) {
-        scroll.style.display = "none";
-    } else {
-        scroll.style.display = "";
-    }
-     */
-
+    updateSelectedPath(div_target);
 
 }
 
@@ -268,8 +257,8 @@ const clickEvent = async (e: Event) => {
         const mouseEvent = e as MouseEvent;
         if (mouseEvent.offsetX < 0) {
             const parentItem: HTMLDivElement = target.closest('.item');
+            updateSelectedPath(parentItem, null);
             parentItem.querySelector("i").click();
-            updateSelectedPath(parentItem);
         }
         return;
     }
@@ -278,6 +267,7 @@ const clickEvent = async (e: Event) => {
         return;
     }
 
+    updateSelectedPath(div_item, null);
     if (dataset.dir && tagName == "I") {  // click dir icon
         await renderFolder(dataset.path, "toggle");
     } else if (dataset.dir && tagName == "DIV") {  // click dir label
@@ -288,7 +278,6 @@ const clickEvent = async (e: Event) => {
     } else {
         return;
     }
-
 
 }
 
@@ -408,7 +397,7 @@ const viewNone = (dataset: DOMStringMap) => {
     div_content.innerHTML = "";
 }
 
-const updateSelectedPath = (target: string | HTMLDivElement, pos: ScrollLogicalPosition = "center") => {
+const updateSelectedPath = (target: string | HTMLDivElement, pos: ScrollLogicalPosition | null = "center") => {
     const cur_selected: HTMLDivElement = div_tree.querySelector(".item.selected");
     let new_selected: HTMLDivElement;
     if (typeof target == "string") {
@@ -416,44 +405,50 @@ const updateSelectedPath = (target: string | HTMLDivElement, pos: ScrollLogicalP
     } else {
         new_selected = target;
     }
-    if (cur_selected == new_selected) return;
     cur_selected?.classList.remove("selected");
     new_selected?.classList.add("selected");
+    if(pos) {
+        scrollIntoView(new_selected?.querySelector(".label"));
+        new_selected?.querySelector(".label").scrollIntoView({ behavior: 'auto', block: pos, inline: 'end' });
+        console.log(`scrollIntoView ${pos}`);
+    }
+}
 
-    new_selected?.querySelector(".label").scrollIntoView({ behavior: 'auto', block: pos, inline: 'end' });
-    console.log(`scrollIntoView ${pos}`);
+const scrollIntoView = (div: HTMLDivElement, pos: ScrollLogicalPosition = "center") => {
+    div?.scrollIntoView({ behavior: 'auto', block: pos, inline: 'end' });
 }
 
 const keydownEvent = async (e: Event) => {
     const keys = ["Enter", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "];
-    if(keys.includes(e.key)){
+    const key = (e as KeyboardEvent).key;
+    if(keys.includes(key)){
         e.stopPropagation();
         e.preventDefault();
     } else {
         return;
     }
     const item_selected: HTMLDivElement = div_tree.querySelector(".item.selected");
-    if (e.key === "Enter") {
+    if (key === "Enter") {
         if (item_selected.dataset.dir) {
             item_selected.querySelector("i").click();
         } else {
-            item_selected.querySelector(".label").click();
+            (item_selected.querySelector(".label") as HTMLDivElement).click();
         }
-    } else if (e.key === "ArrowUp") {
+    } else if (key === "ArrowUp") {
         const arr = Array.from(div_tree.querySelectorAll(".item"));
         const idx = arr.indexOf(item_selected);
         const prev_idx = Math.max(idx-1, 0);
         if (idx != prev_idx) {
-            updateSelectedPath(arr[prev_idx]);
+            updateSelectedPath(arr[prev_idx] as HTMLDivElement);
         }
-    } else if (e.key === "ArrowDown") {
+    } else if (key === "ArrowDown") {
         const arr = Array.from(div_tree.querySelectorAll(".item"));
         const idx = arr.indexOf(item_selected);
         const next_idx = Math.min(idx+1, arr.length-1);
         if (idx != next_idx) {
-            updateSelectedPath(arr[next_idx]);
+            updateSelectedPath(arr[next_idx] as HTMLDivElement);
         }
-    } else if (e.key === "ArrowLeft") {
+    } else if (key === "ArrowLeft") {
         const parent = item_selected.closest(".items").closest(".item");
         const has_items = item_selected.querySelector(".item") != null;
         if (item_selected.dataset.dir && has_items) {
@@ -463,22 +458,22 @@ const keydownEvent = async (e: Event) => {
             updateSelectedPath(new_item_selected);
         } else {
             parent?.querySelector("i").click();
-            updateSelectedPath(parent);
+            updateSelectedPath(parent as HTMLDivElement);
         }
-    } else if (e.key === "ArrowRight") {
+    } else if (key === "ArrowRight") {
         if (item_selected.dataset.dir) {
             item_selected?.querySelector("i").click();
         } else {
             item_selected?.querySelector("i").click();
         }
-        updateSelectedPath(item_selected);
+        updateSelectedPath(item_selected, null);
 
-    } else if (e.key === " ") {
-        item_selected?.querySelector(".label").click();
+    } else if (key === " ") {
+        (item_selected?.querySelector(".label") as HTMLDivElement).click();
     }
 
 }
 
 const updateContentTitle = (dataset: DOMStringMap) => {
-    document.querySelector(".right .top").innerHTML = dataset.path;
+    document.querySelector(".right .top .label").innerHTML = `<i class="fa-solid fa-file"></i>${dataset.path}`;
 }
