@@ -28,13 +28,12 @@
 
 import "./resources/fontawesome/css/all.min.css";
 import './index.css';
-import type {OrdItem, Folder, MetaType, Item, HomeType} from "../napi-folder/bindings"
+import type {OrdItem, Folder, MetaType, Item} from "../napi-folder/bindings"
 import {IFolderAPI} from "./preload";
-import type {HomePathMap} from "./preload";
 import {isVisibleInViewport, shadowHtml} from "./renderer_utils";
 
 const div_tree: HTMLDivElement = document.querySelector(".tree");
-const div_left: HTMLDivElement = document.querySelector(".left");
+// const div_left: HTMLDivElement = document.querySelector(".left");
 const div_right: HTMLDivElement = document.querySelector(".right");
 const div_left_top: HTMLDivElement = document.querySelector(".left .top");
 const resizer: HTMLDivElement = document.querySelector(".resizer");
@@ -48,8 +47,8 @@ declare global {
         api: IFolderAPI
     }
 }
+type FolderRenderType = "Root" | "Fold" | "Toggle" ;
 const api = window.api;
-
 
 const g_cache_nm = "folder_cache";
 const g_fetch_size = 500;
@@ -60,7 +59,7 @@ let g_cur_path: string;
 
 window.addEventListener('DOMContentLoaded', async () => {
     console.log('onload');
-    viewHomeDir();
+    await viewHomeDir();
     resizeLayout();
     // g_tree_order = await api.getState("ordering", g_tree_order);
     try {
@@ -71,10 +70,11 @@ window.addEventListener('DOMContentLoaded', async () => {
     console.log(g_cur_path);
 
     // g_cur_path = "C:\\Windows\\WinSxS"; // TODO: debug
-
     // g_cur_path = "C:\\"; // TODO: debug
+    // g_cur_path = "C:\\sources\\ui\\readme.txt"; // TODO: debug
 
-    await renderFolder(g_cur_path, "reload");
+    await renderFullPath(g_cur_path);
+    // await renderFolder(g_cur_path, "Root");
     div_tree.focus();
     div_tree.addEventListener("click", clickEvent);
     div_tree.addEventListener("keydown", keydownEvent);
@@ -82,15 +82,19 @@ window.addEventListener('DOMContentLoaded', async () => {
 
 })
 
-const renderFolder = async (dir: string, click_type: "reload" | "toggle") => {
+const renderFolder = async (dir: string, render_type: FolderRenderType = "Root" ) => {
 
     let div_target: HTMLDivElement = document.querySelector(`.tree div.item[data-path="${CSS.escape(dir)}"]`);
     const div_items = div_target?.querySelector(".item .items");
-    const reload = click_type == "reload" || (click_type == "toggle" && !div_items);
-
+    const hasChildren = !!div_items;
     div_target?.querySelector(".items")?.remove();
 
-    if (reload) {
+    if (render_type === "Root") {
+        div_tree.innerHTML = "";
+        div_target = null;
+    }
+    if (render_type == "Root" || render_type == "Fold" ||
+        (render_type == "Toggle" && !hasChildren)) {
         console.log("reload");
 
         let tot_take = 0;
@@ -104,12 +108,12 @@ const renderFolder = async (dir: string, click_type: "reload" | "toggle") => {
             });
             const base_path = folder.base_nm;
             if (!div_target) {
-                const div_item = item_dom(folder.item, base_path);
+                const div_item = itemDom(folder.item, base_path);
                 div_tree.appendChild(div_item);
                 div_target = div_item;
             }
             const base_path_for_items = folder.item.nm == "" ? base_path : [base_path, folder.item.nm].join(g_sep);
-            render_items(div_target, folder.item.items, base_path_for_items);
+            renderItems(div_target, folder.item.items, base_path_for_items);
             tot_take += folder.take_n;
             if (folder.tot == tot_take) {
                 break;
@@ -121,9 +125,37 @@ const renderFolder = async (dir: string, click_type: "reload" | "toggle") => {
 
 }
 
+const renderFullPath = async (full_path: string, n = 0) => {
+    const arr = full_path.split(g_sep);
+    if ( n == arr.length - 1) { // last selection
+        let selected_path = arr.join(g_sep);
+        if (selected_path.endsWith(":")) {
+            selected_path += g_sep;
+        }
+        const selected = updateSelectedPath(selected_path);
+        requestAnimationFrame(() => {
+            const label: HTMLDivElement = selected?.querySelector(".label");
+            label?.click();
+        });
+        return;
+    }
+    let render_type: FolderRenderType;
+    if (n == 0){
+        render_type = "Root";
+    } else {
+        render_type = "Fold";
+    }
+    let path = arr.slice(0, n+1).join(g_sep);
+    if (path.endsWith(":")) {
+        path += g_sep;
+    }
+    console.log(path);
+    await renderFolder(path, render_type);
+    await renderFullPath(full_path, n+1);
+}
 
 
-const render_items = (base_div: Element, items: Item[], base_path: string) => {
+const renderItems = (base_div: Element, items: Item[], base_path: string) => {
 
     const frag = document.createDocumentFragment();
     const div_items = document.createElement("div");
@@ -131,25 +163,26 @@ const render_items = (base_div: Element, items: Item[], base_path: string) => {
     div_items.title = base_path;
     base_div.appendChild(div_items);
     for (const item of items) {
-        const div = item_dom(item, base_path);
+        const div = itemDom(item, base_path);
         frag.appendChild(div);
     }
     div_items.appendChild(frag);
 }
 
-const item_dom = (item: Item, base_path: string) => {
+const itemDom = (item: Item, base_path: string) => {
     const div = document.createElement("div");
     div.classList.add("item");
-    set_dataset(div, item, base_path);
+    setDataset(div, item, base_path);
 
     const nm = item.nm == "" ? [base_path, item.nm].join(g_sep) : item.nm;
-    div.innerHTML = `<div class="label"><i class="fa-solid ${path_icon(item)}"></i>${nm}</div>`;
-    (div.querySelector(".label") as HTMLDivElement).title = nm;
+    div.innerHTML = `<div class="label"><i class="fa-solid ${pathIcon(item)}"></i>${nm}</div>`;
+    const div_label: HTMLDivElement = div.querySelector(".label");
+    div_label.title = nm;
     div.querySelector("i").dataset.title = nm;
     return div;
 }
 
-const set_dataset = (div: HTMLDivElement, item: Item, base_path: string) => {
+const setDataset = (div: HTMLDivElement, item: Item, base_path: string) => {
     if (item.nm) div.dataset.nm = item.nm;
     if (item.ext) div.dataset.ext = item.ext;
     if (item.dir === true) div.dataset.dir = String(item.dir);
@@ -161,7 +194,7 @@ const set_dataset = (div: HTMLDivElement, item: Item, base_path: string) => {
     div.dataset.path = [base_path, item.nm].join(g_sep);
 }
 
-const path_icon = (item: Item): string => {
+const pathIcon = (item: Item): string => {
     return item.dir ? (item.has ? "fa-folder-plus" : "fa-folder") : "fa-file";
 }
 
@@ -219,7 +252,7 @@ const resizeLayout = (left: number | undefined = undefined) => {
         left = resizer.offsetLeft;
     }
     if (left == 0) {
-        left = defaultLeft;  // default
+        left = defaultLeft;
     }
 
     const minLeft = 0;
@@ -234,8 +267,6 @@ const resizeLayout = (left: number | undefined = undefined) => {
 
     scroll.style.left = (resizerLeft - scrollWidth) + 'px';
     scroll.style.height = div_tree.clientHeight + 'px';
-    // scroll.style.top = 28 + 'px';
-    // scroll.style.bottom = 28 + div_tree.clientHeight + 'px';
     scroll.style.width = scrollWidth + 'px';
     if (div_tree.clientHeight == div_tree.scrollHeight) {
         scroll.style.display = "none";
@@ -276,7 +307,7 @@ const clickEvent = async (e: Event) => {
 
     updateSelectedPath(div_item);
     if (dataset.dir && tagName == "I") {  // click dir icon
-        await renderFolder(dataset.path, "toggle");
+        await renderFolder(dataset.path, "Toggle");
     } else if (dataset.dir && tagName == "DIV") {  // click dir label
     } else if (!dataset.dir && tagName == "I") {
         await viewFile(div_item);
@@ -368,6 +399,7 @@ const viewIframe = (dataset: DOMStringMap) => {
     div_content.appendChild(div_embed);
 }
 
+/*
 const viewHtml = (dataset: DOMStringMap) => {
 
     div_content.dataset.type = "html";
@@ -382,6 +414,7 @@ const viewHtml = (dataset: DOMStringMap) => {
             div_content.innerHTML =reason;
         })
 }
+ */
 
 const viewShadowHtml = (dataset: DOMStringMap) => {
 
@@ -419,7 +452,7 @@ const viewNone = (dataset: DOMStringMap) => {
     div_content.innerHTML = "";
 }
 
-const updateSelectedPath = (target: string | HTMLDivElement, pos: ScrollLogicalPosition | null = "center") => {
+const updateSelectedPath = (target: string | HTMLDivElement, pos: ScrollLogicalPosition | null = "center"): HTMLDivElement => {
     const cur_selected: HTMLDivElement = div_tree.querySelector(".item.selected");
     let new_selected: HTMLDivElement;
     if (typeof target == "string") {
@@ -436,6 +469,7 @@ const updateSelectedPath = (target: string | HTMLDivElement, pos: ScrollLogicalP
             console.log(`scrollIntoView ${pos}`);
         }
     }
+    return new_selected;
 }
 
 const scrollIntoView = (div: HTMLDivElement, pos: ScrollLogicalPosition = "center") => {
@@ -505,10 +539,7 @@ const updateContentTitle = (dataset: DOMStringMap) => {
 const viewHomeDir = async () => {
     const homeDir = await api.getHomeDir();
     console.log(homeDir);
-    // const upPath = (document.querySelector(".tree .item") as HTMLDivElement).dataset.path + "/..";
-    (div_left_top.querySelector(".link.cur") as HTMLDivElement).dataset.path = ".";
-    (div_left_top.querySelector(".link.root") as HTMLDivElement).dataset.path = "/";
-    (div_left_top.querySelector(".link.up") as HTMLDivElement).dataset.path = "..";
+    (div_left_top.querySelector(".link.root") as HTMLDivElement).dataset.path = homeDir.RootDir;
     (div_left_top.querySelector(".link.home") as HTMLDivElement).dataset.path = homeDir.HomeDir;
     (div_left_top.querySelector(".link.down") as HTMLDivElement).dataset.path = homeDir.DownloadDir;
     (div_left_top.querySelector(".link.docs") as HTMLDivElement).dataset.path = homeDir.DocumentDir;
@@ -525,9 +556,19 @@ const clickTopEvent = async (e: Event) => {
     }
     const link: HTMLDivElement = target.closest(".link");
     let path = link.dataset.path;
-    if (path == "..") {
-        path = [(div_tree.querySelector(".item") as HTMLDivElement).dataset.path, path].join(g_sep);
+    if (path == ".") {
+        const div_item: HTMLDivElement = div_tree.querySelector(".item");
+        path = div_item.dataset.path;
+    } else if (path == "..") {
+        const div_item: HTMLDivElement = div_tree.querySelector(".item");
+        path = div_item.dataset.path;
+        if (!path.endsWith(g_sep)) {
+            const div_item: HTMLDivElement = div_tree.querySelector(".item");
+            const arr = div_item.dataset.path.split(g_sep);
+            path = arr.slice(0, -1).join(g_sep);
+        }
     }
-    div_tree.innerHTML = "";
-    await renderFolder(path, "reload");
+    console.log("top:", path);
+    // await renderFolder(path, "Root");
+    await renderFullPath(path);
 }

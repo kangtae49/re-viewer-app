@@ -4,13 +4,12 @@ mod models;
 mod path_ext;
 mod system_time_ext;
 mod api;
-use std::collections::HashMap;
 use napi_derive::napi;
 use napi::{Error as NApiError};
 use serde::{Serialize, Deserialize};
 use crate::api::get_instance;
 use crate::models::{OrdItem, OrderAsc, OrderBy, MetaType, OptParams, Params,
-                    ApiError, TextContent, HomeType};
+                    ApiError, TextContent};
 
 
 

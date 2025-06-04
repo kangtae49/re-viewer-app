@@ -1,4 +1,4 @@
-use std::cmp;
+use std::{cmp, path};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -315,6 +315,7 @@ impl Api {
 
     pub async fn get_home_dir(&self) -> Result<HashMap<HomeType, String>, ApiError> {
         Ok([
+            (HomeType::RootDir, Some(path::absolute(PathBuf::from("/"))?)),
             (HomeType::HomeDir, dirs_next::home_dir()),
             (HomeType::DownloadDir ,dirs_next::download_dir()),
             (HomeType::VideoDir ,dirs_next::video_dir()),

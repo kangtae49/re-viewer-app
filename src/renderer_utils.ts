@@ -1,4 +1,7 @@
 export const isVisibleInViewport = (el: HTMLElement, viewEl: HTMLElement): boolean => {
+    if(!el){
+        return true;
+    }
     const rect = el.getBoundingClientRect();
     const viewRect = viewEl.getBoundingClientRect();
     return (

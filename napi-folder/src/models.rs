@@ -43,6 +43,7 @@ pub enum OrderAsc {
 #[derive(TS, Serialize, Deserialize, Eq, Clone, PartialEq, Hash, Debug)]
 #[ts(export)]
 pub enum HomeType {
+    RootDir,
     HomeDir,
     DownloadDir,
     VideoDir,
