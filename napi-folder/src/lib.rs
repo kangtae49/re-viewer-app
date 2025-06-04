@@ -4,12 +4,13 @@ mod models;
 mod path_ext;
 mod system_time_ext;
 mod api;
-
+use std::collections::HashMap;
 use napi_derive::napi;
 use napi::{Error as NApiError};
 use serde::{Serialize, Deserialize};
 use crate::api::get_instance;
-use crate::models::{OrdItem, OrderAsc, OrderBy, MetaType, OptParams, Params, ApiError, TextContent};
+use crate::models::{OrdItem, OrderAsc, OrderBy, MetaType, OptParams, Params,
+                    ApiError, TextContent, HomeType};
 
 
 
@@ -71,12 +72,18 @@ impl FolderApi {
   ///
   /// # arg
   /// - key
-  /// - default_val: If the key does not exists in the cache, inserts the default value and return it.
+  /// - default_val: If the key does not exist in the cache, insert the default value and return it.
   #[napi]
   pub async fn get_state(&self, key: String, default_val: Option<String>) -> Result<Option<String>, NApiError> {
     let val = get_instance().get_state(&key, default_val).await?;
     println!("get_state: {:?}", val);
     Ok(val)
+  }
+
+  #[napi]
+  pub async fn get_home_dir(&self) ->Result<String, NApiError> {
+    let obj = get_instance().get_home_dir().await?;
+    self.from_obj(&obj, false).map_err(Into::<NApiError>::into)
   }
 
   fn from_str<'a, T> (&self, json_str: &'a str) -> Result<T, ApiError>

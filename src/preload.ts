@@ -4,8 +4,7 @@
 
 import {contextBridge, ipcRenderer} from 'electron'
 import path from "path";
-import type {Folder, OptParams, TextContent} from "../napi-folder/bindings"
-
+import type {Folder, OptParams, TextContent, HomeType} from "../napi-folder/bindings"
 // __dirname: re-viewer-app\.vite\build
 const isDev = process.env.NODE_ENV === "development";
 const nativePath = isDev
@@ -14,6 +13,7 @@ const nativePath = isDev
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const {FolderApi} = require(nativePath);
 
+export type HomePathMap = Record<HomeType, string>;
 
 export interface IFolderAPI {
     getCurPath: () => Promise<string>,
@@ -21,6 +21,7 @@ export interface IFolderAPI {
     readText: (pathStr: string) => Promise<TextContent>,
     setState: <T> (key: string, val: T) => Promise<T>,
     getState: <T> (key: string, default_val: object | undefined) => Promise<T>,
+    getHomeDir: () => Promise<HomePathMap>
 }
 
 const api: IFolderAPI = {
@@ -56,6 +57,11 @@ const api: IFolderAPI = {
             obj_default_val = JSON.stringify(default_val);
         }
         return (new FolderApi()).getState(key, obj_default_val)
+            .then(JSON.parse);
+    },
+    getHomeDir: async (): Promise<HomePathMap> => {
+        (new FolderApi()).getHomeDir();
+        return (new FolderApi()).getHomeDir()
             .then(JSON.parse);
     },
 

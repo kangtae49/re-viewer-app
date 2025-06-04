@@ -1,5 +1,6 @@
 use std::cmp;
 use std::cmp::Ordering;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::path::Component::Prefix;
 use std::sync::OnceLock;
@@ -11,7 +12,9 @@ use encoding_rs::Encoding;
 use chardetng::EncodingDetector;
 use moka::future::Cache;
 use rayon::prelude::*;
-use crate::models::{MetaType, OrdItem, OrderAsc, OrderBy, CacheKey, CacheVal, CachePathsKey, Item, Folder, Params, TextContent, ApiError};
+use dirs_next;
+
+use crate::models::{MetaType, OrdItem, OrderAsc, OrderBy, CacheKey, CacheVal, CachePathsKey, Item, Folder, Params, TextContent, ApiError, HomeType};
 use crate::path_ext::PathExt;
 use crate::system_time_ext::SystemTimeExt;
 
@@ -308,6 +311,29 @@ impl Api {
                 text: opt_text
             })
         }
+    }
+
+    pub async fn get_home_dir(&self) -> Result<HashMap<HomeType, String>, ApiError> {
+        Ok([
+            (HomeType::HomeDir, dirs_next::home_dir()),
+            (HomeType::DownloadDir ,dirs_next::download_dir()),
+            (HomeType::VideoDir ,dirs_next::video_dir()),
+            (HomeType::DocumentDir ,dirs_next::document_dir()),
+            (HomeType::DesktopDir ,dirs_next::desktop_dir()),
+            (HomeType::PictureDir ,dirs_next::picture_dir()),
+            (HomeType::AudioDir ,dirs_next::audio_dir()),
+            (HomeType::ConfigDir ,dirs_next::config_dir()),
+            (HomeType::DataDir ,dirs_next::data_dir()),
+            (HomeType::DataLocalDir ,dirs_next::data_local_dir()),
+            (HomeType::CacheDir ,dirs_next::cache_dir()),
+            (HomeType::FontDir ,dirs_next::font_dir()),
+            (HomeType::PublicDir ,dirs_next::public_dir()),
+            (HomeType::ExecutableDir ,dirs_next::executable_dir()),
+            (HomeType::RuntimeDir ,dirs_next::runtime_dir()),
+            (HomeType::TemplateDir ,dirs_next::template_dir()),
+        ].into_iter().filter_map(|(k, opt) | {
+            opt.map(|v| (k, v.to_string_lossy().into_owned()))
+        }).collect())
     }
 }
 

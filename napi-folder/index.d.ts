@@ -28,7 +28,8 @@ export declare class FolderApi {
    *
    * # arg
    * - key
-   * - default_val: If the key does not exists in the cache, inserts the default value and return it.
+   * - default_val: If the key does not exist in the cache, insert the default value and return it.
    */
   getState(key: string, defaultVal?: string | undefined | null): Promise<string | null>
+  getHomeDir(): Promise<string>
 }

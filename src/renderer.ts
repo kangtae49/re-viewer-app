@@ -28,13 +28,15 @@
 
 import "./resources/fontawesome/css/all.min.css";
 import './index.css';
-import type {OrdItem, Folder, MetaType, Item} from "../napi-folder/bindings"
+import type {OrdItem, Folder, MetaType, Item, HomeType} from "../napi-folder/bindings"
 import {IFolderAPI} from "./preload";
-import {isVisibleInViewport} from "./renderer_utils";
+import type {HomePathMap} from "./preload";
+import {isVisibleInViewport, shadowHtml} from "./renderer_utils";
 
 const div_tree: HTMLDivElement = document.querySelector(".tree");
 const div_left: HTMLDivElement = document.querySelector(".left");
 const div_right: HTMLDivElement = document.querySelector(".right");
+const div_left_top: HTMLDivElement = document.querySelector(".left .top");
 const resizer: HTMLDivElement = document.querySelector(".resizer");
 
 const scroll: HTMLDivElement = document.querySelector(".scroll");
@@ -58,6 +60,7 @@ let g_cur_path: string;
 
 window.addEventListener('DOMContentLoaded', async () => {
     console.log('onload');
+    viewHomeDir();
     resizeLayout();
     // g_tree_order = await api.getState("ordering", g_tree_order);
     try {
@@ -75,10 +78,12 @@ window.addEventListener('DOMContentLoaded', async () => {
     div_tree.focus();
     div_tree.addEventListener("click", clickEvent);
     div_tree.addEventListener("keydown", keydownEvent);
+    div_left_top.addEventListener("click", clickTopEvent);
 
 })
 
-const renderFolder = async (dir: string, click_type: string) => {
+const renderFolder = async (dir: string, click_type: "reload" | "toggle") => {
+
     let div_target: HTMLDivElement = document.querySelector(`.tree div.item[data-path="${CSS.escape(dir)}"]`);
     const div_items = div_target?.querySelector(".item .items");
     const reload = click_type == "reload" || (click_type == "toggle" && !div_items);
@@ -87,6 +92,7 @@ const renderFolder = async (dir: string, click_type: string) => {
 
     if (reload) {
         console.log("reload");
+
         let tot_take = 0;
         for (const skip_n of [0, g_fetch_size]) {
             const folder: Folder = await api.readFolder({
@@ -156,7 +162,7 @@ const set_dataset = (div: HTMLDivElement, item: Item, base_path: string) => {
 }
 
 const path_icon = (item: Item): string => {
-    return item.dir ? (item.has ? "fa-folder-open" : "fa-folder") : "fa-file";
+    return item.dir ? (item.has ? "fa-folder-plus" : "fa-folder") : "fa-file";
 }
 
 
@@ -291,7 +297,7 @@ const viewFile = async (div_item: HTMLDivElement) => {
     } else if (dataset.mt.endsWith("/pdf")) {
         viewEmbed(dataset);
     } else if (dataset.mt.endsWith("/html")) {
-        viewHtml(dataset);
+        viewShadowHtml(dataset);
     } else if (dataset.mt.endsWith("/json")) {
         viewIframe(dataset);
     } else if (dataset.mt.endsWith("/xml")) {
@@ -363,6 +369,7 @@ const viewIframe = (dataset: DOMStringMap) => {
 }
 
 const viewHtml = (dataset: DOMStringMap) => {
+
     div_content.dataset.type = "html";
     div_content.dataset.mt = dataset.mt;
     api.readText(dataset.path)
@@ -372,8 +379,22 @@ const viewHtml = (dataset: DOMStringMap) => {
         })
         .catch((reason) => {
             console.log(reason);
-            div_content.classList.add("html");
-            div_content.innerHTML = reason;
+            div_content.innerHTML =reason;
+        })
+}
+
+const viewShadowHtml = (dataset: DOMStringMap) => {
+
+    div_content.dataset.type = "html";
+    div_content.dataset.mt = dataset.mt;
+    api.readText(dataset.path)
+        .then((textContent) => {
+            console.log(textContent.mimetype, textContent.enc);
+            shadowHtml(div_content, textContent.text);
+        })
+        .catch((reason) => {
+            console.log(reason);
+            shadowHtml(div_content, reason);
         })
 }
 
@@ -479,4 +500,34 @@ const keydownEvent = async (e: Event) => {
 
 const updateContentTitle = (dataset: DOMStringMap) => {
     document.querySelector(".right .top .label").innerHTML = `<i class="fa-solid fa-file"></i>${dataset.path}`;
+}
+
+const viewHomeDir = async () => {
+    const homeDir = await api.getHomeDir();
+    console.log(homeDir);
+    // const upPath = (document.querySelector(".tree .item") as HTMLDivElement).dataset.path + "/..";
+    (div_left_top.querySelector(".link.cur") as HTMLDivElement).dataset.path = ".";
+    (div_left_top.querySelector(".link.root") as HTMLDivElement).dataset.path = "/";
+    (div_left_top.querySelector(".link.up") as HTMLDivElement).dataset.path = "..";
+    (div_left_top.querySelector(".link.home") as HTMLDivElement).dataset.path = homeDir.HomeDir;
+    (div_left_top.querySelector(".link.down") as HTMLDivElement).dataset.path = homeDir.DownloadDir;
+    (div_left_top.querySelector(".link.docs") as HTMLDivElement).dataset.path = homeDir.DocumentDir;
+    (div_left_top.querySelector(".link.video") as HTMLDivElement).dataset.path = homeDir.VideoDir;
+    (div_left_top.querySelector(".link.music") as HTMLDivElement).dataset.path = homeDir.AudioDir;
+    (div_left_top.querySelector(".link.image") as HTMLDivElement).dataset.path = homeDir.PictureDir;
+    (div_left_top.querySelector(".link.desktop") as HTMLDivElement).dataset.path = homeDir.DesktopDir;
+}
+
+const clickTopEvent = async (e: Event) => {
+    const target = e.target as HTMLDivElement;
+    if (target.tagName != "I") {
+        return;
+    }
+    const link: HTMLDivElement = target.closest(".link");
+    let path = link.dataset.path;
+    if (path == "..") {
+        path = [(div_tree.querySelector(".item") as HTMLDivElement).dataset.path, path].join(g_sep);
+    }
+    div_tree.innerHTML = "";
+    await renderFolder(path, "reload");
 }

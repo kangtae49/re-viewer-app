@@ -39,6 +39,28 @@ pub enum OrderAsc {
     Desc,
 }
 
+#[allow(dead_code)]
+#[derive(TS, Serialize, Deserialize, Eq, Clone, PartialEq, Hash, Debug)]
+#[ts(export)]
+pub enum HomeType {
+    HomeDir,
+    DownloadDir,
+    VideoDir,
+    DocumentDir,
+    DesktopDir,
+    PictureDir,
+    AudioDir,
+    ConfigDir,
+    DataDir,
+    DataLocalDir,
+    CacheDir,
+    FontDir,
+    PublicDir,
+    ExecutableDir,
+    RuntimeDir,
+    TemplateDir,
+}
+
 
 #[derive(TS, Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug)]
 #[ts(export)]
@@ -137,6 +159,7 @@ pub struct OptParams {
     pub is_pretty: Option<bool>,
     pub cache_nm: Option<String>,
 }
+
 
 #[allow(dead_code)]
 #[derive(Serialize, Deserialize, Clone, Debug)]
