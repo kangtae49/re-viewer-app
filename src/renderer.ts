@@ -30,6 +30,7 @@ import "./resources/fontawesome/css/all.min.css";
 import './index.css';
 import type {OrdItem, Folder, MetaType, Item} from "../napi-folder/bindings"
 import {IFolderAPI} from "./preload";
+import {isVisibleInViewport} from "./renderer_utils";
 
 const div_tree: HTMLDivElement = document.querySelector(".tree");
 const div_left: HTMLDivElement = document.querySelector(".left");
@@ -257,7 +258,7 @@ const clickEvent = async (e: Event) => {
         const mouseEvent = e as MouseEvent;
         if (mouseEvent.offsetX < 0) {
             const parentItem: HTMLDivElement = target.closest('.item');
-            updateSelectedPath(parentItem, null);
+            updateSelectedPath(parentItem);
             parentItem.querySelector("i").click();
         }
         return;
@@ -267,7 +268,7 @@ const clickEvent = async (e: Event) => {
         return;
     }
 
-    updateSelectedPath(div_item, null);
+    updateSelectedPath(div_item);
     if (dataset.dir && tagName == "I") {  // click dir icon
         await renderFolder(dataset.path, "toggle");
     } else if (dataset.dir && tagName == "DIV") {  // click dir label
@@ -408,9 +409,11 @@ const updateSelectedPath = (target: string | HTMLDivElement, pos: ScrollLogicalP
     cur_selected?.classList.remove("selected");
     new_selected?.classList.add("selected");
     if(pos) {
-        scrollIntoView(new_selected?.querySelector(".label"));
-        new_selected?.querySelector(".label").scrollIntoView({ behavior: 'auto', block: pos, inline: 'end' });
-        console.log(`scrollIntoView ${pos}`);
+        if (!isVisibleInViewport(new_selected, div_tree)) {
+            scrollIntoView(new_selected?.querySelector(".label"));
+            new_selected?.querySelector(".label").scrollIntoView({ behavior: 'auto', block: pos, inline: 'end' });
+            console.log(`scrollIntoView ${pos}`);
+        }
     }
 }
 
@@ -438,16 +441,16 @@ const keydownEvent = async (e: Event) => {
         const arr = Array.from(div_tree.querySelectorAll(".item"));
         const idx = arr.indexOf(item_selected);
         const prev_idx = Math.max(idx-1, 0);
-        if (idx != prev_idx) {
+        // if (idx != prev_idx) {
             updateSelectedPath(arr[prev_idx] as HTMLDivElement);
-        }
+        // }
     } else if (key === "ArrowDown") {
         const arr = Array.from(div_tree.querySelectorAll(".item"));
         const idx = arr.indexOf(item_selected);
         const next_idx = Math.min(idx+1, arr.length-1);
-        if (idx != next_idx) {
+        // if (idx != next_idx) {
             updateSelectedPath(arr[next_idx] as HTMLDivElement);
-        }
+        // }
     } else if (key === "ArrowLeft") {
         const parent = item_selected.closest(".items").closest(".item");
         const has_items = item_selected.querySelector(".item") != null;
@@ -466,7 +469,7 @@ const keydownEvent = async (e: Event) => {
         } else {
             item_selected?.querySelector("i").click();
         }
-        updateSelectedPath(item_selected, null);
+        updateSelectedPath(item_selected);
 
     } else if (key === " ") {
         (item_selected?.querySelector(".label") as HTMLDivElement).click();
