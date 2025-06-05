@@ -12,5 +12,5 @@
     "moduleResolution": "node",
     "resolveJsonModule": true
   },
-  "include": ["src/**/*", "napi-folder/bindings/*"]
+  "include": ["napi-folder/bindings/*"]
 }

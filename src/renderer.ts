@@ -32,7 +32,7 @@ import './splitter.css';
 import {Splitter} from "./splitter";
 import type {OrdItem, Folder, MetaType, Item , DiskInfo } from "../napi-folder/bindings"
 import {IFolderAPI} from "./preload";
-import {SEP, isVisibleInViewport, shadowHtml} from "./renderer_utils";
+import {SEP, isVisibleInViewport, shadowHtml, setDataset, getDataset} from "./renderer_utils";
 
 const div_tree: HTMLDivElement = document.querySelector(".tree");
 const div_left_top: HTMLDivElement = document.querySelector(".left .top");
@@ -44,7 +44,16 @@ declare global {
     interface Window {
         api: IFolderAPI
     }
+
+    interface Element {
+        getDataset (this: Element): DOMStringMap;
+        setDataset (this: Element, obj: Record<string, string | number | boolean | bigint | undefined>): void;
+    }
 }
+
+Element.prototype.getDataset = getDataset;
+Element.prototype.setDataset = setDataset;
+
 type FolderRenderType = "Root" | "Fold" | "Toggle" ;
 const api = window.api;
 

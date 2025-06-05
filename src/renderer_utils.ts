@@ -1,13 +1,11 @@
 export const SEP = "\\"
 
-// global.d.ts
-
-function getDataset (this: Element) {
+export function getDataset (this: Element) {
     const div = this as HTMLDivElement;
     return div.dataset;
 }
 
-function setDataset (this: Element, obj: Record<string, string | number | boolean | bigint | undefined>) {
+export function setDataset (this: Element, obj: Record<string, string | number | boolean | bigint | undefined>) {
     const div = this as HTMLDivElement;
     Object.entries(obj).forEach(([key, value]) => {
         if (typeof value === "boolean" && value == false) {
@@ -20,8 +18,6 @@ function setDataset (this: Element, obj: Record<string, string | number | boolea
     });
 }
 
-Element.prototype.getDataset = getDataset;
-Element.prototype.setDataset = setDataset;
 
 
 
