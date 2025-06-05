@@ -112,22 +112,6 @@ export class Splitter {
     }
 
 
-    private showOverlay (){
-        Object.assign(this.overlay.style, {
-            display: "block", pointerEvents: "all", background: "transparent"
-        })
-    }
-
-    private hideOverlay() {
-        Object.assign(this.overlay.style, {
-            display: "none", pointerEvents: "none", background: ""
-        })
-    }
-
-    private changeScrollTarget(targetScroll: HTMLDivElement) {
-        this.targetScroll = targetScroll;
-    }
-
     public resizeLayout (left: number | undefined = undefined) {
         const defaultLeft = this.defaultLeft;
         const resizerWidth = 6;
