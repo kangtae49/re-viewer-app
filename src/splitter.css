@@ -1,0 +1,10 @@
+.splitter-container { margin: 0; padding: 0; width: 100%; height: 100%; }
+.splitter-container .scroll { position: absolute; margin: 0; padding:0; top: 28px; z-index: 1; overflow-y: auto; }
+.splitter-container .scroll .inner { margin:0; padding: 0; width: 1px; height: 100%; }
+.splitter-container .overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 100; display: none; }
+.splitter-container .overlay.active { display: block; pointer-events: all; background: transparent;}
+.splitter-container .pane-a { position: absolute; width: 100%; height: 100%; z-index: 0; }
+.splitter-container .pane-b { position: absolute; width: 100%; height: 100%; z-index: 1; background-color: white; }
+.splitter-container .resizer { position: absolute; margin:0; padding:0; top: 0; left: 0; bottom: 0; width: 6px; background: #dfd6d6; cursor: ew-resize; z-index: 1;}
+
+
