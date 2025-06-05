@@ -30,7 +30,7 @@ import "./resources/fontawesome/css/all.min.css";
 import './index.css';
 import './splitter.css';
 import {Splitter} from "./splitter";
-import type {OrdItem, Folder, MetaType, Item /*, DiskInfo */} from "../napi-folder/bindings"
+import type {OrdItem, Folder, MetaType, Item , DiskInfo } from "../napi-folder/bindings"
 import {IFolderAPI} from "./preload";
 import {SEP, isVisibleInViewport, shadowHtml} from "./renderer_utils";
 
@@ -80,7 +80,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     // g_cur_path = "C:\\Windows\\WinSxS"; // TODO: debug
     // g_cur_path = "C:\\"; // TODO: debug
     // g_cur_path = "C:\\sources\\ui\\readme.txt"; // TODO: debug
-
+    // await renderDisks();
     await renderFullPath(g_cur_path);
     // await renderFolder(g_cur_path, "Root");
     div_tree.focus();
@@ -134,11 +134,17 @@ const renderFolder = async (dir: string, render_type: FolderRenderType = "Root" 
 
 }
 
-// const renderDisks = async (disks: DiskInfo []) => {
-//     disks.forEach((disk: DiskInfo) => {
-//
-//     })
-// }
+const renderDisks = async () => {
+    const disks = await api.getDisks();
+    div_tree.innerHTML = "";
+    disks.forEach((disk: DiskInfo) => {
+        const div_item = itemDom({
+            nm: disk.path,
+            dir: true
+        });
+        div_tree.appendChild(div_item);
+    })
+}
 
 const renderFullPath = async (full_path: string, n = 0) => {
     const arr = full_path.split(SEP);
@@ -156,7 +162,9 @@ const renderFullPath = async (full_path: string, n = 0) => {
     }
     let render_type: FolderRenderType;
     if (n == 0){
-        render_type = "Root";
+        await renderDisks();
+        // render_type = "Root";
+        render_type = "Fold";
     } else {
         render_type = "Fold";
     }
@@ -184,11 +192,26 @@ const renderItems = (base_div: Element, items: Item[], base_path: string) => {
     div_items.appendChild(frag);
 }
 
-const itemDom = (item: Item, base_path: string) => {
+const itemDom = (item: Item, base_path?: string) => {
     const div = document.createElement("div");
     div.classList.add("item");
-    div.updateItemDataset(item, base_path);
-    // setDataset(div, item, base_path);
+    let path: string;
+    if (base_path) {
+        path = [base_path, item.nm].join(SEP);
+    } else {
+        path = item.nm;
+    }
+    div.setDataset({
+        nm: item?.nm,
+        dir: item?.dir,
+        ext: item?.ext,
+        mt: item?.mt,
+        cnt: item?.cnt,
+        has: item?.has,
+        sz: item?.sz,
+        tm: item?.tm,
+        path: path
+    });
 
     const nm = item.nm == "" ? [base_path, item.nm].join(SEP) : item.nm;
     div.innerHTML = `<div class="label"><i class="fa-solid ${pathIcon(item)}"></i>${nm}</div>`;
@@ -489,7 +512,7 @@ const updateContentTitle = (dataset: DOMStringMap) => {
 const viewHomeDir = async () => {
     const homeDir = await api.getHomeDir();
     console.log(homeDir);
-    div_left_top.querySelector(".link.root").setDataset({path: homeDir.RootDir});
+    div_left_top.querySelector(".link.root").setDataset({path: "/"});
     div_left_top.querySelector(".link.home").setDataset({path: homeDir.HomeDir});
     div_left_top.querySelector(".link.down").setDataset({path: homeDir.DownloadDir});
     div_left_top.querySelector(".link.docs").setDataset({path: homeDir.DocumentDir});
@@ -504,9 +527,14 @@ const clickLeftTopEvent = async (e: Event) => {
     if (target.tagName != "I") {
         return;
     }
+    e.preventDefault();
+
     const link: HTMLDivElement = target.closest(".link");
     let path = link.dataset.path;
-    if (path == ".") {
+    if (path == "/") {
+        renderDisks();
+        return;
+    } else if (path == ".") {
         const div_item: HTMLDivElement = div_tree.querySelector(".item");
         path = div_item.dataset.path;
     } else if (path == "..") {
