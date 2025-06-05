@@ -70,6 +70,13 @@ pub struct OrdItem {
     pub asc: OrderAsc,
 }
 
+#[derive(TS, Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug)]
+#[ts(export)]
+pub struct DiskInfo {
+    pub path: String,
+}
+
+
 
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub struct CacheKey {

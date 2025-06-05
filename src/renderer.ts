@@ -28,19 +28,17 @@
 
 import "./resources/fontawesome/css/all.min.css";
 import './index.css';
-import type {OrdItem, Folder, MetaType, Item} from "../napi-folder/bindings"
+import './splitter.css';
+import {Splitter} from "./splitter";
+import type {OrdItem, Folder, MetaType, Item /*, DiskInfo */} from "../napi-folder/bindings"
 import {IFolderAPI} from "./preload";
-import {isVisibleInViewport, shadowHtml} from "./renderer_utils";
+import {SEP, isVisibleInViewport, shadowHtml} from "./renderer_utils";
 
 const div_tree: HTMLDivElement = document.querySelector(".tree");
-// const div_left: HTMLDivElement = document.querySelector(".left");
-const div_right: HTMLDivElement = document.querySelector(".right");
 const div_left_top: HTMLDivElement = document.querySelector(".left .top");
-const resizer: HTMLDivElement = document.querySelector(".resizer");
 
-const scroll: HTMLDivElement = document.querySelector(".scroll");
-const scroll_inner: HTMLDivElement = document.querySelector(".scroll .inner");
 const div_content: HTMLDivElement = document.querySelector(".content");
+const div_title_path: HTMLDivElement = document.querySelector(".title-path");
 
 declare global {
     interface Window {
@@ -54,13 +52,23 @@ const g_cache_nm = "folder_cache";
 const g_fetch_size = 500;
 const g_tree_order: OrdItem [] = [{nm: "Dir", asc: "Asc"}, {nm: "Nm", asc: "Asc"}];
 const g_tree_meta: MetaType [] = ["Sz", "Has", "Mt"];
-const g_sep = "\\";
 let g_cur_path: string;
+let g_splitter:  Splitter;
+
 
 window.addEventListener('DOMContentLoaded', async () => {
     console.log('onload');
     await viewHomeDir();
-    resizeLayout();
+
+    g_splitter = new Splitter({
+        container: ".main.container",
+        targetA: ".left",
+        targetB: ".right",
+        targetScroll: ".left.container .tree",
+        defaultLeft: 200,
+    });
+
+    // splitter.resizeLayout();
     // g_tree_order = await api.getState("ordering", g_tree_order);
     try {
         g_cur_path = await api.getCurPath();
@@ -76,9 +84,10 @@ window.addEventListener('DOMContentLoaded', async () => {
     await renderFullPath(g_cur_path);
     // await renderFolder(g_cur_path, "Root");
     div_tree.focus();
-    div_tree.addEventListener("click", clickEvent);
-    div_tree.addEventListener("keydown", keydownEvent);
-    div_left_top.addEventListener("click", clickTopEvent);
+    div_tree.addEventListener("click", clickTreeEvent);
+    div_tree.addEventListener("keydown", keydownTreeEvent);
+    div_left_top.addEventListener("click", clickLeftTopEvent);
+    div_title_path.addEventListener("click", clickTitlePathEvent);
 
 })
 
@@ -112,7 +121,7 @@ const renderFolder = async (dir: string, render_type: FolderRenderType = "Root" 
                 div_tree.appendChild(div_item);
                 div_target = div_item;
             }
-            const base_path_for_items = folder.item.nm == "" ? base_path : [base_path, folder.item.nm].join(g_sep);
+            const base_path_for_items = folder.item.nm == "" ? base_path : [base_path, folder.item.nm].join(SEP);
             renderItems(div_target, folder.item.items, base_path_for_items);
             tot_take += folder.take_n;
             if (folder.tot == tot_take) {
@@ -120,17 +129,23 @@ const renderFolder = async (dir: string, render_type: FolderRenderType = "Root" 
             }
         }
     }
-    resizeLayout();
+    g_splitter.resizeLayout();
     updateSelectedPath(div_target);
 
 }
 
+// const renderDisks = async (disks: DiskInfo []) => {
+//     disks.forEach((disk: DiskInfo) => {
+//
+//     })
+// }
+
 const renderFullPath = async (full_path: string, n = 0) => {
-    const arr = full_path.split(g_sep);
+    const arr = full_path.split(SEP);
     if ( n == arr.length - 1) { // last selection
-        let selected_path = arr.join(g_sep);
+        let selected_path = arr.join(SEP);
         if (selected_path.endsWith(":")) {
-            selected_path += g_sep;
+            selected_path += SEP;
         }
         const selected = updateSelectedPath(selected_path);
         requestAnimationFrame(() => {
@@ -145,9 +160,9 @@ const renderFullPath = async (full_path: string, n = 0) => {
     } else {
         render_type = "Fold";
     }
-    let path = arr.slice(0, n+1).join(g_sep);
+    let path = arr.slice(0, n+1).join(SEP);
     if (path.endsWith(":")) {
-        path += g_sep;
+        path += SEP;
     }
     console.log(path);
     await renderFolder(path, render_type);
@@ -172,122 +187,28 @@ const renderItems = (base_div: Element, items: Item[], base_path: string) => {
 const itemDom = (item: Item, base_path: string) => {
     const div = document.createElement("div");
     div.classList.add("item");
-    setDataset(div, item, base_path);
+    div.updateItemDataset(item, base_path);
+    // setDataset(div, item, base_path);
 
-    const nm = item.nm == "" ? [base_path, item.nm].join(g_sep) : item.nm;
+    const nm = item.nm == "" ? [base_path, item.nm].join(SEP) : item.nm;
     div.innerHTML = `<div class="label"><i class="fa-solid ${pathIcon(item)}"></i>${nm}</div>`;
     const div_label: HTMLDivElement = div.querySelector(".label");
     div_label.title = nm;
-    div.querySelector("i").dataset.title = nm;
+    div.querySelector("i").setDataset({title: nm});
     return div;
 }
 
-const setDataset = (div: HTMLDivElement, item: Item, base_path: string) => {
-    if (item.nm) div.dataset.nm = item.nm;
-    if (item.ext) div.dataset.ext = item.ext;
-    if (item.dir === true) div.dataset.dir = String(item.dir);
-    if (item.mt) div.dataset.mt = item.mt;
-    if (item.cnt) div.dataset.cnt = String(item.cnt);
-    if (item.has === true) div.dataset.has = String(item.has);
-    if (item.sz) div.dataset.sz = String(item.sz);
-    if (item.tm) div.dataset.tm = String(item.tm);
-    div.dataset.path = [base_path, item.nm].join(g_sep);
-}
 
 const pathIcon = (item: Item): string => {
     return item.dir ? (item.has ? "fa-folder-plus" : "fa-folder") : "fa-file";
 }
 
 
-let isDragging = false;
-
-resizer.addEventListener('mousedown', () => {
-    isDragging = true;
-    const overlay: HTMLDivElement = document.querySelector(".iframe-overlay");
-    if (overlay) {
-        overlay.classList.add("active");
-    }
-    document.body.style.cursor = 'ew-resize';
-});
-
-document.addEventListener('mousemove', (e) => {
-    if (!isDragging) return;
-    resizeLayout(e.clientX);
-});
-
-
-document.addEventListener('mouseup', () => {
-    isDragging = false;
-    const overlay: HTMLDivElement = document.querySelector(".iframe-overlay");
-    if (overlay) {
-        overlay.classList.remove("active");
-    }
-    document.body.style.cursor = '';
-});
-
-scroll.addEventListener('scroll', () => {
-    if (div_tree.scrollTop != scroll.scrollTop) {
-        div_tree.scrollTop = scroll.scrollTop;
-    }
-});
-
-div_tree.addEventListener('scroll', () => {
-    if (div_tree.scrollTop != scroll.scrollTop) {
-        scroll.scrollTop = div_tree.scrollTop;
-    }
-});
-
-
-
-window.addEventListener('resize', () => {
-    resizeLayout();
-});
-
-const resizeLayout = (left: number | undefined = undefined) => {
-    const defaultLeft = 200;
-    const resizerWidth = 6;
-    const scrollWidth = 18;
-
-    if (left === undefined) {
-        left = resizer.offsetLeft;
-    }
-    if (left == 0) {
-        left = defaultLeft;
-    }
-
-    const minLeft = 0;
-    const maxLeft = window.innerWidth; // - 100;
-    const resizerLeft = Math.min(Math.max(left, minLeft), maxLeft);
-    const contentLeft = resizerLeft + resizerWidth;
-    const contentWidth = window.innerWidth - contentLeft;
-
-    resizer.style.left = resizerLeft + 'px';
-    div_right.style.left = contentLeft + 'px';
-    div_right.style.width = contentWidth + 'px';
-
-    scroll.style.left = (resizerLeft - scrollWidth) + 'px';
-    scroll.style.height = div_tree.clientHeight + 'px';
-    scroll.style.width = scrollWidth + 'px';
-    if (div_tree.clientHeight == div_tree.scrollHeight) {
-        scroll.style.display = "none";
-    } else {
-        scroll.style.display = "";
-    }
-
-    scroll_inner.style.height = div_tree.scrollHeight + 'px';
-    if (div_tree.clientHeight == div_tree.scrollHeight) {
-        scroll.style.display = "none";
-    } else {
-        scroll.style.display = "";
-    }
-
-}
-
-const clickEvent = async (e: Event) => {
+const clickTreeEvent = async (e: Event) => {
     const target = e.target as HTMLDivElement;
     const tagName = target.tagName;
-    const div_item = target.closest(".item") as HTMLDivElement;
-    const dataset = div_item?.dataset;
+    const div_item = target.closest(".item");
+    const dataset = div_item?.getDataset();
     if (!dataset) return;
     e.preventDefault();
 
@@ -319,8 +240,8 @@ const clickEvent = async (e: Event) => {
 
 }
 
-const viewFile = async (div_item: HTMLDivElement) => {
-    const dataset = div_item.dataset;
+const viewFile = async (div_item: Element) => {
+    const dataset = div_item.getDataset();
     updateContentTitle(dataset);
     div_content.innerHTML = "";
     if (dataset.mt.startsWith("image/")) {
@@ -345,17 +266,21 @@ const viewFile = async (div_item: HTMLDivElement) => {
 }
 
 const viewImg = (dataset: DOMStringMap) => {
-    div_content.dataset.type = "img";
-    div_content.dataset.mt = dataset.mt;
-    const div_img = document.createElement("img");
+    div_content.setDataset({
+        type: "img",
+        mt: dataset.mt
+    });
+    const div_img  = document.createElement("img");
     div_img.src = dataset.path;
     div_img.title = dataset.path;
     div_content.appendChild(div_img);
 }
 
 const viewEmbed = (dataset: DOMStringMap) => {
-    div_content.dataset.type = "embed";
-    div_content.dataset.mt = dataset.mt;
+    div_content.setDataset({
+        type: "embed",
+        mt: dataset.mt,
+    })
     const div_embed = document.createElement("embed");
     div_embed.src = dataset.path;
     div_embed.title = dataset.path;
@@ -369,8 +294,10 @@ const viewEmbed = (dataset: DOMStringMap) => {
 }
 
 const viewMedia = (dataset: DOMStringMap) => {
-    div_content.dataset.type = "media";
-    div_content.dataset.mt = dataset.mt;
+    div_content.setDataset({
+        type: "media",
+        mt: dataset.mt,
+    })
     const nm = dataset.mt.split("/")[0];
     let div_embed;
     if (nm == "audio") {
@@ -388,8 +315,10 @@ const viewMedia = (dataset: DOMStringMap) => {
     div_content.appendChild(div_embed);
 }
 const viewIframe = (dataset: DOMStringMap) => {
-    div_content.dataset.type = "iframe";
-    div_content.dataset.mt = dataset.mt;
+    div_content.setDataset({
+        type: "iframe",
+        mt: dataset.mt,
+    })
     const div_embed = document.createElement("iframe");
     div_embed.src = dataset.path;
 
@@ -417,9 +346,10 @@ const viewHtml = (dataset: DOMStringMap) => {
  */
 
 const viewShadowHtml = (dataset: DOMStringMap) => {
-
-    div_content.dataset.type = "html";
-    div_content.dataset.mt = dataset.mt;
+    div_content.setDataset({
+        type: "html",
+        mt: dataset.mt,
+    })
     api.readText(dataset.path)
         .then((textContent) => {
             console.log(textContent.mimetype, textContent.enc);
@@ -432,8 +362,10 @@ const viewShadowHtml = (dataset: DOMStringMap) => {
 }
 
 const viewText = (dataset: DOMStringMap) => {
-    div_content.dataset.type = "text";
-    div_content.dataset.mt = dataset.mt;
+    div_content.setDataset({
+        type: "text",
+        mt: dataset.mt,
+    })
     api.readText(dataset.path)
         .then((textContent) => {
             console.log(textContent.mimetype, textContent.enc);
@@ -447,14 +379,16 @@ const viewText = (dataset: DOMStringMap) => {
 }
 
 const viewNone = (dataset: DOMStringMap) => {
-    console.log(dataset.mt);
-    div_content.dataset.type = "none";
+    div_content.setDataset({
+        type: "none",
+        mt: dataset.mt,
+    })
     div_content.innerHTML = "";
 }
 
-const updateSelectedPath = (target: string | HTMLDivElement, pos: ScrollLogicalPosition | null = "center"): HTMLDivElement => {
-    const cur_selected: HTMLDivElement = div_tree.querySelector(".item.selected");
-    let new_selected: HTMLDivElement;
+const updateSelectedPath = (target: string | Element, pos: ScrollLogicalPosition | null = "center"): Element => {
+    const cur_selected = div_tree.querySelector(".item.selected");
+    let new_selected: Element;
     if (typeof target == "string") {
         new_selected = div_tree.querySelector(`.item[data-path="${CSS.escape(target)}"]`);
     } else {
@@ -476,7 +410,7 @@ const scrollIntoView = (div: HTMLDivElement, pos: ScrollLogicalPosition = "cente
     div?.scrollIntoView({ behavior: 'auto', block: pos, inline: 'end' });
 }
 
-const keydownEvent = async (e: Event) => {
+const keydownTreeEvent = async (e: Event) => {
     const keys = ["Enter", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "];
     const key = (e as KeyboardEvent).key;
     if(keys.includes(key)){
@@ -490,21 +424,21 @@ const keydownEvent = async (e: Event) => {
         if (item_selected.dataset.dir) {
             item_selected.querySelector("i").click();
         } else {
-            (item_selected.querySelector(".label") as HTMLDivElement).click();
+            (item_selected.querySelector(".label") as HTMLElement).click();
         }
     } else if (key === "ArrowUp") {
         const arr = Array.from(div_tree.querySelectorAll(".item"));
         const idx = arr.indexOf(item_selected);
         const prev_idx = Math.max(idx-1, 0);
         // if (idx != prev_idx) {
-            updateSelectedPath(arr[prev_idx] as HTMLDivElement);
+            updateSelectedPath(arr[prev_idx]);
         // }
     } else if (key === "ArrowDown") {
         const arr = Array.from(div_tree.querySelectorAll(".item"));
         const idx = arr.indexOf(item_selected);
         const next_idx = Math.min(idx+1, arr.length-1);
         // if (idx != next_idx) {
-            updateSelectedPath(arr[next_idx] as HTMLDivElement);
+            updateSelectedPath(arr[next_idx]);
         // }
     } else if (key === "ArrowLeft") {
         const parent = item_selected.closest(".items").closest(".item");
@@ -516,7 +450,7 @@ const keydownEvent = async (e: Event) => {
             updateSelectedPath(new_item_selected);
         } else {
             parent?.querySelector("i").click();
-            updateSelectedPath(parent as HTMLDivElement);
+            updateSelectedPath(parent);
         }
     } else if (key === "ArrowRight") {
         if (item_selected.dataset.dir) {
@@ -533,23 +467,39 @@ const keydownEvent = async (e: Event) => {
 }
 
 const updateContentTitle = (dataset: DOMStringMap) => {
-    document.querySelector(".right .top .label").innerHTML = `<i class="fa-solid fa-file"></i>${dataset.path}`;
+    const cur_dir_all = document.querySelector(".cur-dir .dir-all");
+    const arr_dir = dataset.path.split(SEP);
+    cur_dir_all.innerHTML = "";
+    for(let i=0; i<arr_dir.length; i++) {
+        if (i != 0) {
+            cur_dir_all.append(SEP);
+        }
+        let path = arr_dir.slice(0, i+1).join(SEP);
+        if (path.endsWith(":")) {
+            path += SEP;
+        }
+        const div_part = document.createElement("div");
+        div_part.classList.add("dir-part");
+        div_part.innerHTML = arr_dir[i];
+        div_part.dataset.path = path;
+        cur_dir_all.appendChild(div_part);
+    }
 }
 
 const viewHomeDir = async () => {
     const homeDir = await api.getHomeDir();
     console.log(homeDir);
-    (div_left_top.querySelector(".link.root") as HTMLDivElement).dataset.path = homeDir.RootDir;
-    (div_left_top.querySelector(".link.home") as HTMLDivElement).dataset.path = homeDir.HomeDir;
-    (div_left_top.querySelector(".link.down") as HTMLDivElement).dataset.path = homeDir.DownloadDir;
-    (div_left_top.querySelector(".link.docs") as HTMLDivElement).dataset.path = homeDir.DocumentDir;
-    (div_left_top.querySelector(".link.video") as HTMLDivElement).dataset.path = homeDir.VideoDir;
-    (div_left_top.querySelector(".link.music") as HTMLDivElement).dataset.path = homeDir.AudioDir;
-    (div_left_top.querySelector(".link.image") as HTMLDivElement).dataset.path = homeDir.PictureDir;
-    (div_left_top.querySelector(".link.desktop") as HTMLDivElement).dataset.path = homeDir.DesktopDir;
+    div_left_top.querySelector(".link.root").setDataset({path: homeDir.RootDir});
+    div_left_top.querySelector(".link.home").setDataset({path: homeDir.HomeDir});
+    div_left_top.querySelector(".link.down").setDataset({path: homeDir.DownloadDir});
+    div_left_top.querySelector(".link.docs").setDataset({path: homeDir.DocumentDir});
+    div_left_top.querySelector(".link.video").setDataset({path: homeDir.VideoDir});
+    div_left_top.querySelector(".link.music").setDataset({path: homeDir.AudioDir});
+    div_left_top.querySelector(".link.image").setDataset({path: homeDir.PictureDir});
+    div_left_top.querySelector(".link.desktop").setDataset({path: homeDir.DesktopDir});
 }
 
-const clickTopEvent = async (e: Event) => {
+const clickLeftTopEvent = async (e: Event) => {
     const target = e.target as HTMLDivElement;
     if (target.tagName != "I") {
         return;
@@ -562,13 +512,23 @@ const clickTopEvent = async (e: Event) => {
     } else if (path == "..") {
         const div_item: HTMLDivElement = div_tree.querySelector(".item");
         path = div_item.dataset.path;
-        if (!path.endsWith(g_sep)) {
+        if (!path.endsWith(SEP)) {
             const div_item: HTMLDivElement = div_tree.querySelector(".item");
-            const arr = div_item.dataset.path.split(g_sep);
-            path = arr.slice(0, -1).join(g_sep);
+            const arr = div_item.dataset.path.split(SEP);
+            path = arr.slice(0, -1).join(SEP);
         }
     }
     console.log("top:", path);
     // await renderFolder(path, "Root");
     await renderFullPath(path);
 }
+
+const clickTitlePathEvent = async (e: MouseEvent) => {
+    const target = e.target as HTMLDivElement;
+    const dir_part: HTMLDivElement = target.closest(".dir-part");
+    if(dir_part?.dataset?.path) {
+        await renderFullPath(dir_part.dataset.path);
+    }
+}
+
+// TODO: drive list

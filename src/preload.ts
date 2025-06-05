@@ -4,7 +4,7 @@
 
 import {contextBridge, ipcRenderer} from 'electron'
 import path from "path";
-import type {Folder, OptParams, TextContent, HomeType} from "../napi-folder/bindings"
+import type {Folder, OptParams, TextContent, HomeType, DiskInfo } from "../napi-folder/bindings"
 // __dirname: re-viewer-app\.vite\build
 const isDev = process.env.NODE_ENV === "development";
 const nativePath = isDev
@@ -21,7 +21,8 @@ export interface IFolderAPI {
     readText: (pathStr: string) => Promise<TextContent>,
     setState: <T> (key: string, val: T) => Promise<T>,
     getState: <T> (key: string, default_val: object | undefined) => Promise<T>,
-    getHomeDir: () => Promise<HomePathMap>
+    getHomeDir: () => Promise<HomePathMap>,
+    getDisks: () => Promise<DiskInfo[]>,
 }
 
 const api: IFolderAPI = {
@@ -60,10 +61,13 @@ const api: IFolderAPI = {
             .then(JSON.parse);
     },
     getHomeDir: async (): Promise<HomePathMap> => {
-        (new FolderApi()).getHomeDir();
         return (new FolderApi()).getHomeDir()
             .then(JSON.parse);
     },
+    getDisks: async (): Promise<DiskInfo[]> => {
+        return (new FolderApi()).getDisks()
+            .then(JSON.parse);
+    }
 
 };
 

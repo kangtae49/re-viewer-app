@@ -13,8 +13,10 @@ use chardetng::EncodingDetector;
 use moka::future::Cache;
 use rayon::prelude::*;
 use dirs_next;
+use sysinfo::Disks;
 
-use crate::models::{MetaType, OrdItem, OrderAsc, OrderBy, CacheKey, CacheVal, CachePathsKey, Item, Folder, Params, TextContent, ApiError, HomeType};
+use crate::models::{MetaType, OrdItem, OrderAsc, OrderBy, CacheKey, CacheVal, CachePathsKey, 
+                    Item, Folder, Params, TextContent, ApiError, HomeType, DiskInfo};
 use crate::path_ext::PathExt;
 use crate::system_time_ext::SystemTimeExt;
 
@@ -336,6 +338,18 @@ impl Api {
             opt.map(|v| (k, v.to_string_lossy().into_owned()))
         }).collect())
     }
+    
+    pub async fn get_disks(&self) -> Result<Vec<DiskInfo>, ApiError> {
+        let disks = Disks::new_with_refreshed_list();
+        let mut ret: Vec<DiskInfo> = vec![];
+        for disk in &disks {
+            let disk_info = DiskInfo {
+                path: disk.mount_point().to_string_lossy().into_owned(),
+            };
+            ret.push(disk_info);
+        }
+        Ok(ret)
+    }
 }
 
 fn as_item(entry: &PathBuf, meta_types: &Vec<MetaType>) -> Item {
@@ -552,6 +566,14 @@ mod tests {
         let s = api.get_state(&String::from("a"), None).await;
         println!("{:?}", s);
     }
+
+    #[tokio::test]
+    async fn test_get_disks() {
+        let api = Api::default();
+        let s = api.get_disks().await;
+        println!("{:?}", s);
+    }
+
 
     #[tokio::test]
     async fn test_read_txt() {

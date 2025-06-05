@@ -85,6 +85,12 @@ impl FolderApi {
     self.from_obj(&obj, false).map_err(Into::<NApiError>::into)
   }
 
+  #[napi]
+  pub async fn get_disks(&self) ->Result<String, NApiError> {
+    let obj = get_instance().get_disks().await?;
+    self.from_obj(&obj, false).map_err(Into::<NApiError>::into)
+  }
+
   fn from_str<'a, T> (&self, json_str: &'a str) -> Result<T, ApiError>
   where
       T: Deserialize<'a> {

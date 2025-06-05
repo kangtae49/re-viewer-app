@@ -1,4 +1,49 @@
-export const isVisibleInViewport = (el: HTMLElement, viewEl: HTMLElement): boolean => {
+import type {Item} from "../napi-folder/bindings"
+
+export const SEP = "\\"
+
+// global.d.ts
+function updateItemDataset  (this: Element, item: Item, base_path: string) {
+    const div = this as HTMLDivElement;
+    div.setDataset({
+        nm: item?.nm,
+        dir: item?.dir,
+        ext: item?.ext,
+        mt: item?.mt,
+        cnt: item?.cnt,
+        has: item?.has,
+        sz: item?.sz,
+        tm: item?.tm,
+        path: [base_path, item.nm].join(SEP)
+    });
+}
+
+function getDataset (this: Element) {
+    const div = this as HTMLDivElement;
+    return div.dataset;
+}
+
+function setDataset (this: Element, obj: Record<string, string | number | boolean | bigint | undefined>) {
+    const div = this as HTMLDivElement;
+    Object.entries(obj).forEach(([key, value]) => {
+        if (typeof value === "boolean" && value == false) {
+            return
+        }
+        if (typeof value === undefined) {
+            return
+        }
+        div.dataset[key] = String(value);
+    });
+}
+
+Element.prototype.updateItemDataset = updateItemDataset;
+Element.prototype.getDataset = getDataset;
+Element.prototype.setDataset = setDataset;
+
+
+
+
+export const isVisibleInViewport = (el: Element, viewEl: Element): boolean => {
     if(!el){
         return true;
     }

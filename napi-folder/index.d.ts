@@ -32,4 +32,5 @@ export declare class FolderApi {
    */
   getState(key: string, defaultVal?: string | undefined | null): Promise<string | null>
   getHomeDir(): Promise<string>
+  getDisks(): Promise<string>
 }
