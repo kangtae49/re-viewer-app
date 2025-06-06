@@ -32,7 +32,7 @@ import './splitter.css';
 import {Splitter} from "./splitter";
 import type {OrdItem, Folder, MetaType, Item , DiskInfo } from "../napi-folder/bindings"
 import {IFolderAPI} from "./preload";
-import {SEP, isVisibleInViewport, shadowHtml, setDataset, getDataset} from "./renderer_utils";
+import {SEP, isVisibleInViewport, shadowHtml, setDataset, getDataset, withLoadingAsync, isLoading} from "./renderer_utils";
 
 const div_tree: HTMLDivElement = document.querySelector(".tree");
 const div_left_top: HTMLDivElement = document.querySelector(".left .top");
@@ -90,8 +90,9 @@ window.addEventListener('DOMContentLoaded', async () => {
     // g_cur_path = "C:\\"; // TODO: debug
     // g_cur_path = "C:\\sources\\ui\\readme.txt"; // TODO: debug
     // await renderDisks();
-
-    await renderFullPath(g_cur_path);
+    await withLoadingAsync( async () => {
+        await renderFullPath(g_cur_path);
+    });
     // await renderFolder(g_cur_path, "Root");
     div_tree.focus();
     div_tree.addEventListener("click", clickTreeEvent);
@@ -242,10 +243,16 @@ const pathIcon = (item: Item): string => {
 
 
 const clickTreeEvent = async (e: Event) => {
+    if (isLoading()) {
+        e.preventDefault();
+        console.log("Loading ...");
+        return;
+    }
     const target = e.target as HTMLDivElement;
     const tagName = target.tagName;
     const div_item = target.closest(".item");
     const dataset = div_item?.getDataset();
+
     if (!dataset) return;
     e.preventDefault();
 
@@ -265,7 +272,9 @@ const clickTreeEvent = async (e: Event) => {
 
     updateSelectedPath(div_item);
     if (dataset.dir && tagName == "I") {  // click dir icon
-        await renderFolder(dataset.path, "Toggle");
+        await withLoadingAsync( async () => {
+            await renderFolder(dataset.path, "Toggle");
+        });
     } else if (dataset.dir && tagName == "DIV") {  // click dir label
     } else if (!dataset.dir && tagName == "I") {
         await viewFile(div_item);

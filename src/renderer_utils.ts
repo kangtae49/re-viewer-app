@@ -43,3 +43,44 @@ export const shadowHtml = (div: HTMLDivElement, html: string) => {
     div.innerHTML = "";
     div.appendChild(div_shadow);
 }
+
+/*
+await withLoadingAsync(async () => {
+    await asyncFunc();
+});
+ */
+export const withLoadingAsync = async function <T>(fn: () => Promise<T>): Promise<T> {
+
+    try {
+        document.documentElement.classList.add("wait-cursor");
+        await raf();
+        return await fn();
+    } finally {
+        document.documentElement.classList.remove("wait-cursor");
+    }
+}
+
+function raf(): Promise<void> {
+    return new Promise(resolve => {
+        requestAnimationFrame(() => resolve());
+    });
+}
+
+
+/*
+withLoading(() => {
+    syncFunc();
+});
+ */
+export const withLoading  = <T> (fn: () => T): T  => {
+    document.documentElement.classList.add("wait-cursor");
+    try {
+        return fn();
+    } finally {
+        document.documentElement.classList.remove("wait-cursor");
+    }
+}
+
+export const isLoading = (): boolean => {
+    return document.documentElement.classList.contains("wait-cursor")
+}
