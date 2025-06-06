@@ -1,7 +1,6 @@
-use std::{cmp, path};
-use std::cmp::Ordering;
+use std::{cmp};
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::{PathBuf};
 use std::path::Component::Prefix;
 use std::sync::OnceLock;
 use std::time::SystemTime;
@@ -11,14 +10,14 @@ use mime_guess::{from_path};
 use encoding_rs::Encoding;
 use chardetng::EncodingDetector;
 use moka::future::Cache;
-use rayon::prelude::*;
 use dirs_next;
 use sysinfo::Disks;
 
-use crate::models::{MetaType, OrdItem, OrderAsc, OrderBy, CacheKey, CacheVal, CachePathsKey, 
+use crate::models::{ CacheKey, CacheVal,
                     Item, Folder, Params, TextContent, ApiError, HomeType, DiskInfo};
 use crate::path_ext::PathExt;
 use crate::system_time_ext::SystemTimeExt;
+use crate::dir::{get_items_win32, update_items, sort_items };
 
 static INSTANCE: OnceLock<Api> = OnceLock::new();
 
@@ -28,7 +27,7 @@ pub fn get_instance() -> &'static Api {
 
 pub struct Api {
     cache_folder: Cache<CacheKey, CacheVal>,
-    cache_paths: Cache<CachePathsKey, Vec<PathBuf>>,
+    // cache_paths: Cache<CachePathsKey, Vec<PathBuf>>,
     state: Cache<String, String>,
 }
 
@@ -36,7 +35,7 @@ impl Default for Api {
     fn default() -> Self {
         Api {
             cache_folder: Cache::new(100),
-            cache_paths: Cache::new(100),
+            // cache_paths: Cache::new(100),
             state: Cache::new(100),
         }
     }
@@ -48,31 +47,10 @@ impl Api {
     pub fn new() -> Self {
         Api {
             cache_folder: Cache::new(100),
-            cache_paths: Cache::new(100),
+            // cache_paths: Cache::new(100),
             state: Cache::new(100),
         }
     }
-
-
-    async fn get_entries<P: AsRef<Path>>(&self, p: P) -> Result<Vec<PathBuf>, ApiError> {
-        let dir = std::fs::read_dir(p.as_ref())?;
-        let entries: Vec<PathBuf> = dir
-            .filter_map(|r| {
-                match r {
-                    Ok(entry) => {
-                        Some(entry.path())
-                    },
-                    Err(err) => {
-                        println!("err: {:?}", err);
-                        None
-                    }
-                }
-            })
-            .collect()
-            ;
-        Ok(entries)
-    }
-
 
     pub async fn get_folder(&self, params: &Params) -> Result<Folder, ApiError> {
 
@@ -160,18 +138,13 @@ impl Api {
                 },
                 meta_types: meta_types.clone().into_iter().collect(),
             };
-            let cache_paths_key = CachePathsKey {
-                nm: cache_key.clone().nm,
-                path: cache_key.clone().path,
-                tm: cache_key.clone().tm,
-            };
 
             sorted_items = match self.cache_folder.get(&cache_key).await {
                 Some(mut cache_val) => {
                     println!("hit cache folder");
                     if cache_val.ordering != ordering  {
-                        let paths = self.get_cache_paths(&cache_paths_key).await;
-                        let mut items_cache = paths.par_iter().map(|entry|as_item(entry, &meta_types)).collect::<Vec<Item>>();
+                        let mut items_cache = get_items_win32(abs.to_string_lossy().as_ref(), &meta_types).unwrap_or(vec![]);
+                        update_items(&mut items_cache, &meta_types);
                         sort_items(&mut items_cache, &ordering);
                         cache_val.items = items_cache;
                         self.cache_folder.insert(cache_key.clone(), cache_val.clone()).await;
@@ -179,9 +152,9 @@ impl Api {
                     cache_val.items
                 }
                 None => {
-                    let paths = self.get_cache_paths(&cache_paths_key).await;
-                    let mut items_new = paths.par_iter().map(|entry|as_item(entry, &meta_types)).collect::<Vec<Item>>();
+                    let mut items_new = get_items_win32(abs.to_string_lossy().as_ref(), &meta_types).unwrap_or(vec![]);
                     sort_items(&mut items_new, &ordering);
+
                     let cache_val = CacheVal {
                         ordering: ordering.clone(),
                         items: items_new.clone(),
@@ -191,8 +164,7 @@ impl Api {
                 }
             };
         } else {
-            let paths = self.get_entries(&abs).await.unwrap_or_default();
-            sorted_items = paths.par_iter().map(|entry|as_item(entry, &meta_types)).collect::<Vec<Item>>();
+            sorted_items = get_items_win32(abs.to_string_lossy().as_ref(), &meta_types).unwrap_or(vec![]);
             sort_items(&mut sorted_items, &ordering);
         }
 
@@ -209,25 +181,11 @@ impl Api {
         folder.take_n = Some(take);
         folder.ordering = Some(ordering.clone());
         folder.tot = Some(len_items);
-        folder.item.cnt = Some(items_sliced.len());
+        folder.cnt = Some(items_sliced.len());
         folder.item.items = Some(items_sliced);
-        folder.item.has = if meta_types.contains(&MetaType::Has) { Some(len_items > 0) } else { None };
+        // folder.item.has = if meta_types.contains(&MetaType::Has) { Some(len_items > 0) } else { None };
 
         Ok(folder)
-    }
-
-    async fn get_cache_paths(&self, key: &CachePathsKey) -> Vec<PathBuf> {
-        match self.cache_paths.get(&key).await {
-            Some(paths) => {
-                println!("hit cache paths");
-                paths
-            },
-            None => {
-                let paths = self.get_entries(&key.path).await.unwrap_or_default();
-                self.cache_paths.insert(key.clone(), paths.clone()).await;
-                paths
-            },
-        }
     }
 
     pub async fn set_state(&self, key: String, opt_val: Option<String>) -> Result<Option<String>, ApiError> {
@@ -317,7 +275,7 @@ impl Api {
 
     pub async fn get_home_dir(&self) -> Result<HashMap<HomeType, String>, ApiError> {
         Ok([
-            (HomeType::RootDir, Some(path::absolute(PathBuf::from("/"))?)),
+            (HomeType::RootDir, Some(std::path::absolute(PathBuf::from("/"))?)),
             (HomeType::HomeDir, dirs_next::home_dir()),
             (HomeType::DownloadDir ,dirs_next::download_dir()),
             (HomeType::VideoDir ,dirs_next::video_dir()),
@@ -352,118 +310,6 @@ impl Api {
     }
 }
 
-fn as_item(entry: &PathBuf, meta_types: &Vec<MetaType>) -> Item {
-    let nm = match entry.file_name() {
-        Some(n) => n.to_string_lossy().to_string(),
-        None => panic!("Error Filename")
-    };
-    let dir = entry.is_dir();
-    let mut mt: Option<String> = None;
-    let mut ext: Option<String> = None;
-    let mut sz: Option<u64> = None;
-    let mut tm: Option<u64> = None;
-    let mut has: Option<bool> = None;
-
-    let cnt: Option<usize> = None;
-    if !dir {
-        if meta_types.contains(&MetaType::Mt) {
-            mt = Some(from_path(&nm).first_or_octet_stream().to_string());
-        }
-        if meta_types.contains(&MetaType::Ext) {
-            ext = entry.extension().map(|ext| ext.to_string_lossy().to_string().to_lowercase());
-        }
-    }
-
-    if !meta_types.is_empty() {
-        match entry.metadata() {
-            Ok(meta) => {
-                if dir {
-                    if meta_types.contains(&MetaType::Has) {
-                        has = Some(entry.has_children());
-                    }
-                } else {
-                    if meta_types.contains(&MetaType::Sz) {
-                        sz = Some(meta.len());
-                    }
-                }
-                if meta_types.contains(&MetaType::Tm) {
-                    tm = meta.modified().map(|t|t.to_sec()).ok();
-                }
-            },
-            Err(err) => {
-                // size = None;
-                println!("err: {:?}", err);
-            },
-        };
-    }
-
-    Item {
-        nm,
-        dir,
-        mt,
-        ext,
-        sz,
-        cnt,
-        has,
-        tm,
-        items: None,
-    }
-}
-
-fn cmp_item<T: Ord>(a: &T, b: &T, asc: &OrderAsc) -> Option<Ordering> {
-    if a.ne(&b) {
-        return if asc == &OrderAsc::Asc {
-            Some(a.cmp(b))
-        } else {
-            Some(b.cmp(a))
-        }
-    }
-    None
-}
-
-fn cmp_str_item(a: &String, b: &String, asc: &OrderAsc) -> Option<Ordering> {
-    let a = a.to_lowercase();
-    let b = b.to_lowercase();
-    cmp_item(&a, &b, asc)
-}
-
-fn cmp_opt_str_item(a: &Option<String>, b: &Option<String>, asc: &OrderAsc) -> Option<Ordering> {
-    match (a, b) {
-        (Some(a), Some(b)) => cmp_str_item(a, b, asc),
-        _ => None
-    }
-}
-
-fn cmp_opt_item<T: Ord>(a: &Option<T>, b: &Option<T>, asc: &OrderAsc) -> Option<Ordering> {
-    match (a, b) {
-        (Some(a), Some(b)) => cmp_item(a, b, asc),
-        _ => None
-    }
-}
-
-
-
-fn sort_items(items: &mut Vec<Item>, ordering: &Vec<OrdItem>) {
-    items.sort_by(|a, b| {
-        for ord in ordering.iter() {
-            let res = match ord.nm {
-                OrderBy::Dir => cmp_item(&b.dir, &a.dir, &ord.asc),
-                OrderBy::Nm => cmp_str_item(&a.nm, &b.nm, &ord.asc),
-                OrderBy::Ext if !a.dir => cmp_opt_str_item(&a.ext, &b.ext, &ord.asc),
-                OrderBy::Mt if !a.dir => cmp_opt_str_item(&a.mt, &b.mt, &ord.asc),
-                OrderBy::Sz if a.sz.ne(&b.sz)  => cmp_opt_item(&a.sz, &b.sz, &ord.asc),
-                _ => None,
-            };
-            if let Some(ord) = res {
-                return ord;
-            }
-        }
-        if !ordering.iter().any(|o| o.nm == OrderBy::Nm) {
-            return a.nm.cmp(&b.nm)
-        }
-        return Ordering::Equal
-    });
-}
 
 
 
@@ -500,7 +346,8 @@ mod tests {
     async fn test_permissions() {
         let api = Api::default();
         let params = Params {
-            path_str: String::from(r"C:\Windows\WinSxS"),
+            // path_str: String::from(r"C:\Windows\WinSxS"),
+            path_str: String::from(r"C:\"),
             ..Params::default()
         };
         assert!(api.get_folder(&params).await.is_ok());
@@ -509,23 +356,12 @@ mod tests {
     }
 
 
-
-    #[tokio::test]
-    async fn test_entries() {
-        let api = Api::default();
-        // let s = r"/C:\Windows\WinSxS";
-        // let s = r"C://MSOCache";
-        let s = r"C://";
-        // assert!(api.get_items(PathBuf::from(s)).await.is_err());
-        assert!(api.get_entries(PathBuf::from(s)).await.is_ok());
-    }
-
-
     #[tokio::test]
     async fn test_dir() {
         let api = Api::default();
         let params = Params {
-            path_str: String::from(r"C:\Windows\WinSxS"),
+            // path_str: String::from(r"C:\Windows\WinSxS"),
+            path_str: String::from(r"C:\"),
             ..Params::default()
         };
         assert!(api.get_folder(&params).await.is_ok());
@@ -536,7 +372,8 @@ mod tests {
     async fn test_get_folder() {
         let api = Api::default();
         let params = Params {
-            path_str: String::from(r"C:\Windows\WinSxS"),
+            // path_str: String::from(r"C:\Windows\WinSxS"),
+            path_str: String::from(r"C:\"),
             // path_str: String::from(r"kkk"),
             // is_cache: false,
             ..Params::default()

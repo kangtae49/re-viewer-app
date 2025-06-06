@@ -14,7 +14,6 @@ use napi::{Error as NApiError, Status};
 pub enum MetaType {
     Sz,
     Tm,
-    Has,
     Mt,
     Ext,
 }
@@ -117,6 +116,7 @@ pub struct Folder {
     pub path_param: String,
     pub base_nm: String,
     pub tot: Option<usize>,
+    pub cnt: Option<usize>,
     pub skip_n: Option<usize>,
     pub take_n: Option<usize>,
     pub ordering: Option<Vec<OrdItem>>,
@@ -134,8 +134,6 @@ pub struct Item {
     pub ext: Option<String>,
     pub mt: Option<String>,
     pub sz: Option<u64>,  // u64
-    pub cnt: Option<usize>,  // usize
-    pub has: Option<bool>,
     pub tm: Option<u64>,  // u64
     pub items: Option<Vec<Item>>
 }
@@ -185,7 +183,7 @@ impl Default for Params {
     fn default() -> Self {
         Params {
             path_str: String::from("."),
-            meta_types: vec![MetaType::Has, MetaType::Sz, MetaType::Tm],
+            meta_types: vec![MetaType::Sz, MetaType::Tm],
             ordering: vec![OrdItem{nm: OrderBy::Dir, asc: OrderAsc::Asc}, OrdItem{nm: OrderBy::Nm, asc: OrderAsc::Asc}],
             skip_n: None,
             take_n: Some(5),
@@ -196,6 +194,7 @@ impl Default for Params {
 }
 
 
+use windows::core::Error as WinError;
 
 #[derive(Error, Debug)]
 pub enum ApiError {
@@ -211,6 +210,10 @@ pub enum ApiError {
     #[error("Folder error: {0}")]
     Folder(String),
 
+    #[error("windows::core::Error: {0}")]
+    DirApi(#[from] WinError),
+
+
 }
 
 impl From<ApiError> for NApiError {
@@ -219,16 +222,21 @@ impl From<ApiError> for NApiError {
             ApiError::NApi(e) => e,
 
             ApiError::Io(e) => {
-                NApiError::new(Status::GenericFailure, format!("IO error: {}", e))
+                NApiError::new(Status::Unknown, format!("IO error: {}", e))
             }
 
             ApiError::Json(e) => {
-                NApiError::new(Status::InvalidArg, format!("JSON error: {}", e))
+                NApiError::new(Status::Unknown, format!("JSON error: {}", e))
+            }
+
+            ApiError::DirApi(e) => {
+                NApiError::new(Status::Unknown, format!("DirApi error: {}", e))
             }
 
             ApiError::Folder(msg) => {
-                NApiError::new(Status::GenericFailure, msg)
+                NApiError::new(Status::Unknown, format!("Folder error: {}", msg))
             }
+            
         }
     }
 }

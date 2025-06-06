@@ -60,7 +60,7 @@ const api = window.api;
 const g_cache_nm = "folder_cache";
 const g_fetch_size = 500;
 const g_tree_order: OrdItem [] = [{nm: "Dir", asc: "Asc"}, {nm: "Nm", asc: "Asc"}];
-const g_tree_meta: MetaType [] = ["Sz", "Has", "Mt"];
+const g_tree_meta: MetaType [] = ["Sz", "Mt"];
 let g_cur_path: string;
 let g_splitter:  Splitter;
 
@@ -215,8 +215,6 @@ const itemDom = (item: Item, base_path?: string) => {
         dir: item?.dir,
         ext: item?.ext,
         mt: item?.mt,
-        cnt: item?.cnt,
-        has: item?.has,
         sz: item?.sz,
         tm: item?.tm,
         path: path
@@ -232,7 +230,7 @@ const itemDom = (item: Item, base_path?: string) => {
 
 
 const pathIcon = (item: Item): string => {
-    return item.dir ? (item.has ? "fa-folder-plus" : "fa-folder") : "fa-file";
+    return item.dir ? "fa-folder" : "fa-file";
 }
 
 

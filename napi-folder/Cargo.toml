@@ -24,6 +24,7 @@ encoding_rs = "0.8.35"
 infer = "0.19.0"
 dirs-next = "2.0.0"
 sysinfo = "0.35.2"
+windows = { version = "0.61.1" , features = ["Win32_Storage_FileSystem", "Win32_Foundation"]}
 
 [build-dependencies]
 napi-build = "2.0.1"
