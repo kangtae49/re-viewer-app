@@ -261,11 +261,11 @@ fn has_children_win32(path: &str) -> Result<bool> {
 }
 
 fn get_ext(nm: &str) ->  Option<String> {
-    Some(from_path(&nm).first_or_octet_stream().to_string())
+    PathBuf::from(nm).extension().map(|ext| ext.to_string_lossy().to_string().to_lowercase())
 }
 
 fn get_mime_type(nm: &str) -> Option<String> {
-    PathBuf::from(nm).extension().map(|ext| ext.to_string_lossy().to_string().to_lowercase())
+    Some(from_path(&nm).first_or_octet_stream().to_string())
 }
 
 pub fn update_items(items: &mut Vec<Item>, meta_types: &Vec<MetaType>) {

@@ -90,6 +90,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     // g_cur_path = "C:\\"; // TODO: debug
     // g_cur_path = "C:\\sources\\ui\\readme.txt"; // TODO: debug
     // await renderDisks();
+
     await renderFullPath(g_cur_path);
     // await renderFolder(g_cur_path, "Root");
     div_tree.focus();
@@ -101,6 +102,9 @@ window.addEventListener('DOMContentLoaded', async () => {
 })
 
 const renderFolder = async (dir: string, render_type: FolderRenderType = "Root" ) => {
+    // requestAnimationFrame(() => {
+    //     document.body.style.cursor = "wait";
+    // });
 
     let div_target: HTMLDivElement = document.querySelector(`.tree div.item[data-path="${CSS.escape(dir)}"]`);
     const div_items = div_target?.querySelector(".item .items");
@@ -141,6 +145,9 @@ const renderFolder = async (dir: string, render_type: FolderRenderType = "Root" 
     g_splitter.resizeLayout();
     updateSelectedPath(div_target);
 
+    // requestAnimationFrame(() => {
+    //     document.body.style.cursor = "default";
+    // });
 }
 
 const renderDisks = async () => {

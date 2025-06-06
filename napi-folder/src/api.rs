@@ -141,18 +141,22 @@ impl Api {
 
             sorted_items = match self.cache_folder.get(&cache_key).await {
                 Some(mut cache_val) => {
-                    println!("hit cache folder");
                     if cache_val.ordering != ordering  {
-                        let mut items_cache = get_items_win32(abs.to_string_lossy().as_ref(), &meta_types).unwrap_or(vec![]);
-                        update_items(&mut items_cache, &meta_types);
-                        sort_items(&mut items_cache, &ordering);
-                        cache_val.items = items_cache;
+                        // let mut items_cache = get_items_win32(abs.to_string_lossy().as_ref(), &meta_types).unwrap_or(vec![]);
+                        // update_items(&mut items_cache, &meta_types);
+                        println!("sort");
+                        sort_items(&mut cache_val.items, &ordering);
+                        // cache_val.items = items_cache;
                         self.cache_folder.insert(cache_key.clone(), cache_val.clone()).await;
+                    } else {
+                        println!("hit cache folder");
                     }
                     cache_val.items
                 }
                 None => {
+                    println!("read folder");
                     let mut items_new = get_items_win32(abs.to_string_lossy().as_ref(), &meta_types).unwrap_or(vec![]);
+                    update_items(&mut items_new, &meta_types);
                     sort_items(&mut items_new, &ordering);
 
                     let cache_val = CacheVal {
