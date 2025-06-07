@@ -22,6 +22,39 @@ export function setDataset (this: Element, obj: Record<string, string | number |
 
 
 
+
+export const getDateFormatter = () => {
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const formatter = new Intl.DateTimeFormat('ko-KR', {
+        timeZone: timeZone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    });
+    return formatter;
+}
+
+export const g_date_formatter = getDateFormatter();
+
+export const toDate = (t: number) => {
+    const date = new Date(Number(t) * 1000);
+    const formatted = g_date_formatter.format(date);
+    const arr = formatted.replace(/\s+/g, "").split(".");
+    return arr.slice(0, 3).join("-") + " " + arr.slice(-1)[0]
+}
+
+
+
+export const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0KB';
+    const kb = Math.ceil(bytes / 1024);
+    return kb.toLocaleString('en-US') + 'KB';
+}
+
 export const isVisibleInViewport = (el: Element, viewEl: Element): boolean => {
     if(!el){
         return true;
