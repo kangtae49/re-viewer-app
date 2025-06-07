@@ -6,9 +6,9 @@
   <title>reViewer</title>
 </head>
 <body>
-<div class="main container">
+<div class="main">
 
-  <div class="left container">
+  <div class="left">
     <div class="top">
       <div class="link root" title="/"><i class="fa-solid fa-inbox"></i></div>
       <div class="link home" title="Home"><i class="fa-solid fa-house-user"></i></div>
@@ -27,7 +27,7 @@
   <div class="scroll"><div class="inner"></div></div>
   <div class="resizer"></div>
   -->
-  <div class="right container">
+  <div class="right">
     <div class="top">
 
       <div class="title-path">
@@ -67,7 +67,7 @@
 
       <div class="file-header">
         <div class="cell file">
-          <div class="ordering data click" data-ordering_name="name" data-ordering="asc">
+          <div class="ordering" data-ordering_name="name" data-ordering="asc">
             <i class="fa-solid fa-circle-chevron-up asc"></i>
             <i class="fa-solid fa-circle-chevron-down desc"></i>
             <i class="fa-solid fa-circle-minus dash"></i>
@@ -76,7 +76,7 @@
         </div>
         <div class="cell browser"></div>
         <div class="cell size">
-          <div class="ordering data click" data-ordering_name="size" data-ordering="dash">
+          <div class="ordering" data-ordering_name="size" data-ordering="dash">
             <i class="fa-solid fa-circle-chevron-up asc"></i>
             <i class="fa-solid fa-circle-chevron-down desc"></i>
             <i class="fa-solid fa-circle-minus dash"></i>
@@ -84,7 +84,7 @@
           </div>
         </div>
         <div class="cell ext">
-          <div class="ordering data click" data-ordering_name="ext" data-ordering="dash">
+          <div class="ordering" data-ordering_name="ext" data-ordering="dash">
             <i class="fa-solid fa-circle-chevron-up asc"></i>
             <i class="fa-solid fa-circle-chevron-down desc"></i>
             <i class="fa-solid fa-circle-minus dash"></i>
@@ -92,7 +92,7 @@
           </div>
         </div>
         <div class="cell date">
-          <div class="ordering data click" data-ordering_name="mtime" data-ordering="dash">
+          <div class="ordering" data-ordering_name="mtime" data-ordering="dash">
             <i class="fa-solid fa-circle-chevron-up asc"></i>
             <i class="fa-solid fa-circle-chevron-down desc"></i>
             <i class="fa-solid fa-circle-minus dash"></i>
@@ -103,7 +103,7 @@
 
 
       <div class="slider-container">
-        <input class="slider" type="range" id="volume" name="volume" min="0" max="100" value="50" ></input>
+        <label for="slider"></label><input class="slider" type="range" id="slider" name="slider" min="0" max="100" value="50" />
       </div>
 
 

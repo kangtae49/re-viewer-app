@@ -120,6 +120,7 @@ pub struct Folder {
     pub skip_n: Option<usize>,
     pub take_n: Option<usize>,
     pub ordering: Option<Vec<OrdItem>>,
+    pub max_len_nm: Option<usize>,
 }
 
 

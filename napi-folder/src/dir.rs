@@ -279,6 +279,32 @@ pub fn update_items(items: &mut Vec<Item>, meta_types: &Vec<MetaType>) {
     }
 }
 
+pub fn update_max_len_nm(items: &Vec<Item>) -> usize {
+    let mut max_len: f32 = 0.0;
+    for item in items {
+        let a = item.nm.chars().count() as f32;
+        let w = item.nm.chars().filter(|&c| is_fullwidth(c)).count() as f32;
+        let r = (a-w) + w*1.5;
+        if r > max_len {
+            max_len = r;
+        }
+    }
+    max_len.round() as usize
+}
+
+fn is_fullwidth(c: char) -> bool {
+    match c as u32 {
+        0x1100..=0x115F   // Hangul Jamo
+        | 0x2E80..=0xA4CF // CJK, Kana, etc.
+        | 0xAC00..=0xD7A3 // Hangul Syllables
+        | 0xF900..=0xFAFF // CJK Compatibility
+        | 0xFE10..=0xFE19
+        | 0xFE30..=0xFE6F
+        | 0xFF00..=0xFF60 // Fullwidth ASCII
+        | 0xFFE0..=0xFFE6 => true,
+        _ => false,
+    }
+}
 
 
 fn cmp_item<T: Ord>(a: &T, b: &T, asc: &OrderAsc) -> Option<Ordering> {

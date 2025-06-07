@@ -17,7 +17,7 @@ use crate::models::{ CacheKey, CacheVal,
                     Item, Folder, Params, TextContent, ApiError, HomeType, DiskInfo};
 use crate::path_ext::PathExt;
 use crate::system_time_ext::SystemTimeExt;
-use crate::dir::{get_items_win32, update_items, sort_items };
+use crate::dir::{get_items_win32, update_items, sort_items, update_max_len_nm };
 
 static INSTANCE: OnceLock<Api> = OnceLock::new();
 
@@ -127,6 +127,7 @@ impl Api {
         folder.item = item;
 
         let mut sorted_items: Vec<Item>;
+        
 
         if let Some(cache_nm_str) = cache_nm {
             let cache_key = CacheKey {
@@ -146,6 +147,7 @@ impl Api {
                         // update_items(&mut items_cache, &meta_types);
                         println!("sort");
                         sort_items(&mut cache_val.items, &ordering);
+                        
                         // cache_val.items = items_cache;
                         self.cache_folder.insert(cache_key.clone(), cache_val.clone()).await;
                     } else {
@@ -157,6 +159,7 @@ impl Api {
                     println!("read folder");
                     let mut items_new = get_items_win32(abs.to_string_lossy().as_ref(), &meta_types).unwrap_or(vec![]);
                     update_items(&mut items_new, &meta_types);
+
                     sort_items(&mut items_new, &ordering);
 
                     let cache_val = CacheVal {
@@ -170,8 +173,9 @@ impl Api {
         } else {
             sorted_items = get_items_win32(abs.to_string_lossy().as_ref(), &meta_types).unwrap_or(vec![]);
             sort_items(&mut sorted_items, &ordering);
+            
         }
-
+        let max_len_nm: Option<usize> = Some(update_max_len_nm(&sorted_items));
         let len_items = sorted_items.len();
         let mut skip = skip_n.unwrap_or(0);
         skip = cmp::min(skip, len_items);
@@ -181,12 +185,14 @@ impl Api {
             None =>  len_items - skip
         };
         let items_sliced: Vec<Item> = sorted_items.iter().skip(skip).take(take).cloned().collect();
+
         folder.skip_n = Some(skip);
         folder.take_n = Some(take);
         folder.ordering = Some(ordering.clone());
         folder.tot = Some(len_items);
         folder.cnt = Some(items_sliced.len());
         folder.item.items = Some(items_sliced);
+        folder.max_len_nm = max_len_nm;
         // folder.item.has = if meta_types.contains(&MetaType::Has) { Some(len_items > 0) } else { None };
 
         Ok(folder)

@@ -1,3 +1,4 @@
+import {isWaitBusy, isWaitResize, isVisibleInViewport} from "./renderer_utils"
 // type Orientation = "vertical" | "horizontal";
 interface SplitterOptions {
     container: string,
@@ -12,7 +13,7 @@ export class Splitter {
     private paneA: HTMLDivElement;
     private paneB: HTMLDivElement;
     private scroll: HTMLDivElement;
-    private scroll_inner: HTMLDivElement;
+    private scrollInner: HTMLDivElement;
     private resizer: HTMLDivElement;
     private overlay: HTMLDivElement;
 
@@ -23,6 +24,7 @@ export class Splitter {
     private targetA: string;
     private targetB: string;
     private defaultLeft: number;
+
 
     constructor(opt: SplitterOptions) {
         this.init(opt);
@@ -46,15 +48,15 @@ export class Splitter {
         this.resizer.classList.add("resizer");
         this.scroll = document.createElement("div");
         this.scroll.classList.add("scroll");
-        this.scroll_inner = document.createElement("div");
-        this.scroll_inner.classList.add("inner");
+        this.scrollInner = document.createElement("div");
+        this.scrollInner.classList.add("inner");
 
         this.overlay = document.createElement("div");
         this.overlay.classList.add("overlay");
 
 
 
-        this.scroll.appendChild(this.scroll_inner);
+        this.scroll.appendChild(this.scrollInner);
 
         const orgA = document.querySelector(this.targetA) as  HTMLDivElement;
         const orgB = document.querySelector(this.targetB) as  HTMLDivElement;
@@ -72,29 +74,28 @@ export class Splitter {
 
         document.querySelector(opt.container).appendChild(this.container);
 
-        this.resizer.addEventListener("mousedown", this.onMouseDown.bind(this));
-        document.addEventListener("mousemove", this.onMouseMove.bind(this));
-        document.addEventListener("mouseup", this.onMouseUp.bind(this));
+        this.resizer.addEventListener("mousedown", this.onMouseDownResizer.bind(this));
+        document.addEventListener("mousemove", this.onMouseMoveResizer.bind(this));
+        document.addEventListener("mouseup", this.onMouseUpResizer.bind(this));
         this.scroll.addEventListener("scroll", this.onScroll.bind(this));
         this.targetScroll.addEventListener("scroll", this.onScrollTarget.bind(this));
-        window.addEventListener("resize", this.onResizeLayout.bind(this));
+        window.addEventListener("resize", this.resizeWindowEvent.bind(this));
     }
 
-    private onResizeLayout() {
-        this.resizeLayout();
-    }
-    private onMouseDown() {
+
+    private onMouseDownResizer() {
         this.isDragging = true;
         this.overlay.classList.add("active");
         document.body.style.cursor = 'ew-resize';
     }
 
-    private onMouseMove(event: MouseEvent) {
+    private onMouseMoveResizer(event: MouseEvent) {
         if (!this.isDragging) return;
+
         this.resizeLayout(event.clientX);
     }
 
-    private onMouseUp() {
+    private onMouseUpResizer() {
         this.isDragging = false;
         this.overlay.classList.remove("active");
         document.body.style.cursor = '';
@@ -143,7 +144,7 @@ export class Splitter {
             this.scroll.style.display = "";
         }
 
-        this.scroll_inner.style.height = this.targetScroll.scrollHeight + 'px';
+        this.scrollInner.style.height = this.targetScroll.scrollHeight + 'px';
         if (this.targetScroll.clientHeight == this.targetScroll.scrollHeight) {
             this.scroll.style.display = "none";
         } else {
@@ -151,4 +152,28 @@ export class Splitter {
         }
     }
 
+    private resizeWindowEvent = async () => {
+        if (isWaitBusy()) {
+            return;
+        }
+        // const content = this.paneB.querySelector(".content");
+        // content.style.display = "none";
+        if (!isWaitResize()) {
+            // this.isResize = true;
+            document.documentElement.classList.add("wait-resize");
+            requestAnimationFrame(() => {
+                setTimeout(() => {
+                    // if (content.style.display == "none") {
+                        document.documentElement.classList.remove("wait-resize");
+                        // console.log("resizer:" + new Date());
+                        // content.style.display = "";
+                        this.resizeLayout();
+                    // }
+                }, 1000);
+            });
+        }
+    }
+
+
 }
+

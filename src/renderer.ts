@@ -26,19 +26,53 @@
  * ```
  */
 
+
+const style = document.createElement('style');
+style.textContent = `
+@font-face {
+    font-family: 'Fira Code';
+    src: url('./resources/FiraCode-Regular.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Fira Code';
+    src: url('./resources/FiraCode-Bold.woff2') format('woff2');
+    font-weight: 700;
+    font-style: normal;
+}
+`;
+document.head.appendChild(style);
+
+
 import "./resources/fontawesome/css/all.min.css";
 import './index.css';
 import './splitter.css';
 import {Splitter} from "./splitter";
 import type {OrdItem, Folder, MetaType, Item , DiskInfo } from "../napi-folder/bindings"
 import {IFolderAPI} from "./preload";
-import {SEP, isVisibleInViewport, shadowHtml, setDataset, getDataset, withLoadingAsync, isLoading, formatFileSize, toDate} from "./renderer_utils";
+import {
+    SEP,
+    isVisibleInViewport,
+    shadowHtml,
+    setDataset,
+    getDataset,
+    withLoadingAsync,
+    isLoading,
+    formatFileSize,
+    toDate,
+    isWaitBusy,
+    isWaitResize,
+} from "./renderer_utils";
 
-type ContentType = "con-lst" | "con-gal" | "view-text" | "view-html" | "view-media" | "view-embed" | "view-img" | "view-none";
+type ContentType = "con-lst" | "con-gal" | "view-text" | "view-html" | "view-iframe" | "view-media" | "view-embed" | "view-img" | "view-none";
 const div_tree: HTMLDivElement = document.querySelector(".tree");
 const div_left_top: HTMLDivElement = document.querySelector(".left .top");
 
 const div_content: HTMLDivElement = document.querySelector(".content");
+
+const div_file_header: HTMLDivElement = document.querySelector(".file-header");
 const div_title_path: HTMLDivElement = document.querySelector(".title-path");
 
 declare global {
@@ -74,10 +108,10 @@ window.addEventListener('DOMContentLoaded', async () => {
     await viewHomeDir();
 
     g_splitter = new Splitter({
-        container: ".main.container",
+        container: ".main",
         targetA: ".left",
         targetB: ".right",
-        targetScroll: ".left.container .tree",
+        targetScroll: ".left .tree",
         defaultLeft: 200,
     });
 
@@ -103,11 +137,14 @@ window.addEventListener('DOMContentLoaded', async () => {
     div_tree.addEventListener("keydown", keydownTreeEvent);
     div_left_top.addEventListener("click", clickLeftTopEvent);
     div_title_path.addEventListener("click", clickTitlePathEvent);
+    div_content.addEventListener("scroll",  scrollContentListEvent);
+
+
 
 })
 
 const renderTreeNode = async (dir: string, render_type: FolderRenderType = "Root" ) => {
-
+    console.log("renderTreeNode");
     let div_target: HTMLDivElement = document.querySelector(`.tree div.item[data-path="${CSS.escape(dir)}"]`);
     const div_items = div_target?.querySelector(".item .items");
     const hasChildren = !!div_items;
@@ -123,12 +160,18 @@ const renderTreeNode = async (dir: string, render_type: FolderRenderType = "Root
 
         let tot_take = 0;
         for (const skip_n of [0, g_fetch_size]) {
+            console.log(`skip: ${skip_n}`);
+            let take_n = undefined;
+            if (skip_n == 0) {
+                take_n = g_fetch_size
+            }
             const folder: Folder = await api.readFolder({
                 cache_nm: g_tree_cache_nm,
                 path_str: dir,
                 ordering: g_tree_order,
                 meta_types: g_tree_meta,
                 skip_n: skip_n,
+                take_n: take_n
             });
             const base_path = folder.base_nm;
             if (!div_target) {
@@ -199,10 +242,14 @@ const renderTree = async (full_path: string, n = 0) => {
 const renderTreeItems = (base_div: Element, items: Item[], base_path: string) => {
 
     const frag = document.createDocumentFragment();
-    const div_items = document.createElement("div");
-    div_items.classList.add("items");
-    div_items.title = base_path;
-    base_div.appendChild(div_items);
+
+    let div_items = base_div.querySelector(".items")
+    if(!div_items) {
+        div_items = document.createElement("div");
+        div_items.classList.add("items");
+        div_items.setAttribute("title", base_path);
+        base_div.appendChild(div_items);
+    }
     for (const item of items) {
         const div = itemDom(item, base_path);
         frag.appendChild(div);
@@ -247,19 +294,39 @@ const renderContentList = async (dataset: DOMStringMap) => {
     setContentType("con-lst");
     // list type or gallery type
     div_content.innerHTML = "";
+    const div_content_list = document.createElement("div");
+    div_content_list.classList.add("content-list");
+    div_content.appendChild(div_content_list);
 
     let tot_take = 0;
     for (const skip_n of [0, g_fetch_size]) {
+        console.log(`skip: ${skip_n}`);
+        let take_n = undefined;
+        if (skip_n == 0) {
+            take_n = g_fetch_size
+        }
         const folder: Folder = await api.readFolder({
             cache_nm: g_content_cache_nm,
             path_str: dataset.path,
             ordering: g_content_order,
             meta_types: g_content_meta,
             skip_n: skip_n,
+            take_n: take_n
         });
+        if (folder.max_len_nm && skip_n == 0) {
+            const max_len_nm = Math.min(folder.max_len_nm, 100);
+            const max_width = (20 + max_len_nm*7.6 + 16 + 110 + 80 + 135) + 'px';
+            const div_con_lst: HTMLDivElement = document.querySelector(".content.con-lst");
+            // div_con_lst.style.overflow = "auto";
+            // div_con_lst.style.overflow = "auto";
+            div_content_list.style.width = max_width;
+            div_file_header.style.width = max_width;
+            // console.log(folder.max_len_nm);
+        }
+
         const base_path = folder.base_nm;
         const base_path_for_items = folder.item.nm == "" ? base_path : [base_path, folder.item.nm].join(SEP);
-        renderContentListItems(div_content, folder.item.items, base_path_for_items);
+        renderContentListItems(div_content_list, folder.item.items, base_path_for_items);
         tot_take += folder.take_n;
         if (folder.tot == tot_take) {
             break;
@@ -284,38 +351,32 @@ const renderContentListItems = (container: HTMLDivElement, items: Item[], base_p
         }
         const div_item = document.createElement("div");
         frag.appendChild(div_item);
-
+        // div_item.style.visibility = "hidden";
         div_item.classList.add("item");
         div_item.setDataset({
             path: [base_path, item.nm].join(SEP),
             dir: item.dir,
             tm: item.tm,
             sz: item.sz,
-            ext: item.ext,
+            ext: item.ext?.slice(0, 8),
             mt: item.mt,
         })
 
         div_item.innerHTML = `
           <div class="cell file">
-            <span class="i-file">
-              <span class="${dir_or_file} click"><i class="fa-solid ${icon}"></i></span>
-              <span class="name click"></span>
-            </span>
+            <div class="i-file">
+              <div class="${dir_or_file} label"><i class="fa-solid ${icon}"></i>${item.nm}</div>
+            </div>
           </div>
-          <div class="cell browser click"><i class="fa-solid fa-globe"></i></div>
-          <div class="cell size"></div>
+          <div class="cell browser"><i class="fa-solid fa-globe"></i></div>
+          <div class="cell size">${formatFileSize(Number(item.sz))}</div>
           <div class="cell ext">${item.ext || ""}</div>
           <div class="cell date">${toDate(Number(item.tm))}</div>
         `
-        const div_i_file = div_item.querySelector(".i-file");
-        const div_icon = div_item.querySelector(".icon");
-        const div_filename = div_item.querySelector(".name");
+        const div_filename = div_item.querySelector(".label");
         const div_size = div_item.querySelector(".cell.size");
-        const div_browser = div_item.querySelector(".cell.browser");
         div_item.querySelector(".file").setAttribute("title", item.nm);
-        div_size.innerHTML = formatFileSize(Number(item.sz));
         div_size.setAttribute("title", String(item.sz));
-        div_filename.innerHTML = item.nm;
         div_filename.setAttribute("title", item.nm);
     }
     container.appendChild(frag);
@@ -327,6 +388,7 @@ const renderContentListItems = (container: HTMLDivElement, items: Item[], base_p
 
 const clickTreeEvent = async (e: Event) => {
     if (isLoading()) {
+        console.log("isLoading");
         e.preventDefault();
         return;
     }
@@ -396,9 +458,9 @@ const viewFile = async (div_item: Element) => {
 
 const viewImg = (dataset: DOMStringMap) => {
     setContentType("view-img");
-    div_content.setDataset({
-        mt: dataset.mt
-    });
+    // div_content.setDataset({
+    //     mt: dataset.mt
+    // });
     const div_img  = document.createElement("img");
     div_img.src = dataset.path;
     div_img.title = dataset.path;
@@ -407,9 +469,9 @@ const viewImg = (dataset: DOMStringMap) => {
 
 const viewEmbed = (dataset: DOMStringMap) => {
     setContentType("view-embed");
-    div_content.setDataset({
-        mt: dataset.mt,
-    })
+    // div_content.setDataset({
+    //     mt: dataset.mt,
+    // })
     const div_embed = document.createElement("embed");
     div_embed.src = dataset.path;
     div_embed.title = dataset.path;
@@ -424,9 +486,9 @@ const viewEmbed = (dataset: DOMStringMap) => {
 
 const viewMedia = (dataset: DOMStringMap) => {
     setContentType("view-media");
-    div_content.setDataset({
-        mt: dataset.mt,
-    })
+    // div_content.setDataset({
+    //     mt: dataset.mt,
+    // })
     const nm = dataset.mt.split("/")[0];
     let div_embed;
     if (nm == "audio") {
@@ -444,10 +506,10 @@ const viewMedia = (dataset: DOMStringMap) => {
     div_content.appendChild(div_embed);
 }
 const viewIframe = (dataset: DOMStringMap) => {
-    setContentType("view-iframe")
-    div_content.setDataset({
-        mt: dataset.mt,
-    })
+    setContentType("view-iframe");
+    // div_content.setDataset({
+    //     mt: dataset.mt,
+    // })
     const div_embed = document.createElement("iframe");
     div_embed.src = dataset.path;
 
@@ -476,9 +538,9 @@ const viewHtml = (dataset: DOMStringMap) => {
 
 const viewShadowHtml = (dataset: DOMStringMap) => {
     setContentType("view-html")
-    div_content.setDataset({
-        mt: dataset.mt,
-    })
+    // div_content.setDataset({
+    //     mt: dataset.mt,
+    // })
     api.readText(dataset.path)
         .then((textContent) => {
             console.log(textContent.mimetype, textContent.enc);
@@ -492,9 +554,9 @@ const viewShadowHtml = (dataset: DOMStringMap) => {
 
 const viewText = (dataset: DOMStringMap) => {
     setContentType("view-text");
-    div_content.setDataset({
-        mt: dataset.mt,
-    })
+    // div_content.setDataset({
+    //     mt: dataset.mt,
+    // })
     api.readText(dataset.path)
         .then((textContent) => {
             console.log(textContent.mimetype, textContent.enc);
@@ -531,11 +593,13 @@ const updateSelectedPath = (target: string | Element): Element => {
 
 const setContentType = (class_nm: ContentType) => {
     console.log(class_nm);
-    const content_types: [ContentType] = ["con-lst", "con-gal", "view-text", "view-html", "view-media", "view-embed", "view-img", "view-none"];
+    const content_types : ContentType[] = [ "con-lst", "con-gal", "view-text", "view-html", "view-iframe", "view-media", "view-embed", "view-img", "view-none"];
     div_content.classList.remove(...["view", ...content_types]);
     if (class_nm.startsWith("view-")) {
         div_content.classList.add("view");
     }
+
+
     div_content.classList.add(class_nm);
 }
 
@@ -678,6 +742,18 @@ const clickTitlePathEvent = async (e: MouseEvent) => {
     if(dir_part?.dataset?.path) {
         await renderTree(dir_part.dataset.path);
     }
+}
+
+const scrollContentListEvent = async () => {
+    // const viewport = document.querySelector(".content");
+    // document.querySelectorAll(".content .item").forEach(elem => {
+    //     if (isVisibleInViewport(elem, viewport)) {
+    //         (elem as HTMLDivElement).style.visibility = "visible";
+    //     } else {
+    //         (elem as HTMLDivElement).style.visibility = "hidden";
+    //     }
+    // })
+
 }
 
 // TODO: drive list
